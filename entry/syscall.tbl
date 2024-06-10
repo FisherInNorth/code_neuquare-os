@@ -1,0 +1,138 @@
+#系统调用号   宏定义(会补上SYS_的前缀)    函数指针名                
+
+# proc
+172  getpid          sys_getpid
+93   exit            sys_exit
+11  sbrk            sys_sbrk
+214  brk            sys_brk
+215  munmap            sys_munmap
+222  mmap            sys_mmap
+220   clone            sys_clone
+221   execve            sys_execve
+260   wait4            sys_wait4
+173  getppid          sys_getppid
+124  sched_yield          sys_sched_yield
+176 getgid      sys_getgid
+177 getegid     sys_getegid
+
+# fs
+80   fstat           sys_fstat
+56  openat            sys_openat
+64  write           sys_write
+63   read            sys_read
+57 close           sys_close
+#19  mkdir           sys_mkdir
+34  mkdirat           sys_mkdirat
+49   chdir           sys_chdir
+37  linkat            sys_linkat
+35  unlinkat          sys_unlinkat
+16  mknod           sys_mknod
+23   dup             sys_dup
+24   dup3             sys_dup3
+#3   pipe            sys_pipe
+59  pipe2           sys_pipe2
+61  getdents64        sys_getdents64
+39  umount2         sys_umount2
+40  mount         sys_mount
+
+# misc
+13  uptime          sys_uptime
+101  nanosleep       sys_nanosleep
+153  times           sys_times
+160  uname           sys_uname
+169  gettimeofday    sys_gettimeofday
+17 getcwd           sys_getcwd
+210 shutdown        sys_shutdown
+
+# debug
+500 print_pgtable sys_print_pgtable
+501 print_vma     sys_print_vma
+502 print_rawfile    sys_print_rawfile
+
+# busybox
+113	clock_gettime	sys_clock_gettime
+48	faccessat	sys_faccessat
+25	fcntl	sys_fcntl
+174	getuid	sys_getuid
+29	ioctl	sys_ioctl
+62	lseek	sys_lseek
+226	mprotect	sys_mprotect
+65	readv	sys_readv
+276	renameat2	sys_renameat2
+134	rt_sigaction	sys_rt_sigaction
+135	rt_sigprocmask	sys_rt_sigprocmask
+139 rt_sigreturn    sys_rt_sigreturn
+71	sendfile	sys_sendfile
+96	set_tid_address	sys_set_tid_address
+43	statfs	sys_statfs
+179	sysinfo	sys_sysinfo
+116	syslog	sys_syslog
+88	utimensat	sys_utimensat
+66 writev   sys_writev
+94 exit_group sys_exit_group
+79 fstatat sys_fstatat 
+175 geteuid sys_getuid
+178 gettid sys_gettid
+73 ppoll sys_ppoll
+
+129 kill sys_kill
+130 tkill sys_tkill
+131 tgkill sys_tgkill
+98 futex sys_futex
+99 set_robust_list sys_set_robust_list
+
+137 rt_sigtimedwait sys_rt_sigtimedwait
+261 prlimit64 sys_prlimit64
+
+# net
+198 socket sys_socket
+200 bind sys_bind
+201 listen sys_listen
+202 accept sys_accept
+203 connect sys_connect
+208 setsockopt sys_setsockopt
+72  pselect6 sys_pselect6
+204 getsockname sys_getsockname
+206 sendto sys_sendto
+207 recvfrom sys_recvfrom
+209 getsockopt sys_getsockopt
+
+67 pread64 sys_pread64
+68 pwrite64 sys_pwrite64
+
+46 ftruncate sys_ftruncate
+81 sync sys_sync
+82 fsync sys_fsync
+
+
+194 shmget sys_shmget
+195 shmctl sys_shmctl
+196 shmat sys_shmat
+
+
+103 setitimer sys_setitimer
+
+123 sched_getaffinity sys_sched_getaffinity
+120 sched_getscheduler sys_sched_getscheduler
+121 sched_getparam sys_sched_getparam
+119 sched_setscheduler sys_sched_setscheduler
+114 clock_getres sys_clock_getres
+
+283 membarrier sys_membarrier
+115 clock_nanosleep sys_clock_nanosleep
+122 sched_setaffinity sys_sched_setaffinity
+
+
+100 get_robust_list sys_get_robust_list
+165 getrusage sys_getrusage
+166 umask sys_umask
+227 msync sys_msync
+78 readlinkat sys_readlinkat
+
+199 socketpair sys_socketpair
+233 madvise sys_madvise
+154 setpgid sys_setpgid
+155 getpgid sys_getpgid
+133 rt_sigsuspend sys_rt_sigsuspend
+53 fchmodat sys_fchmodat
+167 prctl sys_prctl

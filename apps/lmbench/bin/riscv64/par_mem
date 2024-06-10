@@ -1,0 +1,1 @@
+/home/jr/myos/apps/lmbench/bin/riscv64/lmbench_all par_mem "$@"
