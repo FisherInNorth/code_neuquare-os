@@ -86,5 +86,4 @@ void clockintr() {
 // printf("hit, clockintr %d, %d\n",++ctr, CLINT_INTERVAL);
     atomic_inc_return(&ticks);       // 或许可以不用原子操作
     timer_list_decrease_atomic(&timer_head);
-    cond_signal(&cond_ticks);
 }

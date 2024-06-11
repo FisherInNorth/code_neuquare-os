@@ -281,7 +281,7 @@ void fat32_i_mapping_destroy(struct inode *ip);
 // ignore it, a rough process
 void alloc_fail(void);
 
-void shutdown_writeback(void);
+void shutdown_writebakc(void);
 // ======================= abandon， may be ============================
 // timer to string
 // int fat32_time_parser(uint16 *, char *, int);

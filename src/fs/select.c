@@ -9,8 +9,6 @@
 #include "memory/allocator.h"
 #include "debug.h"
 #include "ipc/pipe.h"
-#include "proc/pcb_life.h"
-#include "driver/console.h"
 
 extern struct cond cond_ticks;
 
@@ -359,91 +357,4 @@ uint64 sys_pselect6(void) {
     if (exceptfds_addr && (copyout(p->mm->pagetable, exceptfds_addr, (char *)&exceptfds, sizeof(exceptfds)) < 0)) return -1;
 
     return ret;
-}
-
-
-#define TICK_GRANULARITY 10L // ms
-#define SEC2TICK(sec) ((sec)*1000 / TICK_GRANULARITY)
-#define MS2TICK(ms) ((ms) / TICK_GRANULARITY)
-#define US2TICK(us) ((us)*TICK_GRANULARITY / 1000)
-#define NS2TICK(ns) ((ns) / 1000 / 1000 / TICK_GRANULARITY)
-static inline uint64 ts2ticks(struct timespec *ts) {
-    return ts ? SEC2TICK(ts->ts_sec) + NS2TICK(ts->ts_nsec) : 0;
-}
-
-uint64 sys_ppoll(void) {
-    uint64 pfdaddr;
-    int nfds;
-    uint64 tsaddr;
-    uint64 sigmaskaddr;
-    struct proc *p = proc_current();
-
-    argaddr(0, &pfdaddr);
-    argint(1, &nfds);
-    argaddr(2, &tsaddr);
-    argaddr(3, &sigmaskaddr);
-
-    ASSERT(nfds == 1);
-    // printf("ts addr is %#lx\n", tsaddr);
-
-    struct pollfd pfd;
-
-    if (copyin(p->mm->pagetable, (char *)&pfd, pfdaddr, sizeof(pfd)) < 0)
-        return -1;
-
-    ASSERT(pfd.events == POLLIN);
-    ASSERT(pfd.fd == 0);
-
-    struct file *f;
-    f = p->ofile[pfd.fd];
-
-    // TODO
-    // argfd(, pfd.fd, , f);
-
-    struct timespec ts;
-    if (tsaddr && copyin(p->mm->pagetable, (char *)&ts, tsaddr, sizeof(struct timespec)) < 0)
-        return -1;
-
-    // uint64 timeout = TIMESEPC2NS(ts);
-    uint64 timeout = tsaddr ? ts2ticks(&ts) : -1;
-
-    while (1) {
-        switch (f->f_type) {
-        case FD_DEVICE:
-            if (consoleready()) goto ret;
-            break;
-        case FD_PIPE:
-            return 1;
-        default:
-            panic("error");
-        }
-
-        if (timeout == -1) continue;
-
-        // uint64 time_now = TIME2NS(rdtime());
-        // if ((TIME2NS(rdtime()) > time_now + timeout)) {
-        //     // printf("ready\n");
-        //     // printfGreen("select , pid : %d exit\n", proc_current()->pid);// debug
-        //     break;
-        // }
-
-        if (timeout) {
-            // Log("hit");
-            extern struct cond cond_ticks;
-            acquire(&cond_ticks.waiting_queue.lock);
-            cond_wait(&cond_ticks, &cond_ticks.waiting_queue.lock);
-            release(&cond_ticks.waiting_queue.lock);
-            timeout--;
-        } else {
-            break;
-        }
-    }
-ret:
-    if (timeout == 0) return 0;
-
-    pfd.revents = pfd.events;
-    if (copyout(p->mm->pagetable, pfdaddr, (char *)&pfd, sizeof(pfd)) < 0)
-        return -1;
-
-    return 1;
 }

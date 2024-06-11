@@ -8,6 +8,7 @@ OBJS=$(addprefix $(BUILD)/, $(addsuffix .o, $(basename $(SRCS))))
 TARGET=$(addprefix $(FSIMG)/, $(basename $(notdir $(SRCS))))
 ARCHIVE=lib/lib.a
 CFLAGS+=-I$(ROOT)/$(User)/include
+CFLAGS+=-O0
 
 all: $(OBJS) $(TARGET)
 

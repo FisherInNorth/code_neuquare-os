@@ -78,10 +78,6 @@ sys_clone(void) {
     argaddr(3, &tls_addr);
     argaddr(4, &ctid_addr);
     return do_clone(flags, stack, ptid_addr, tls_addr, ctid_addr);
-    // if (ret < 0) {
-    //     Log("hit");
-    // }
-    // return ret;
 }
 
 /*
@@ -118,8 +114,6 @@ sys_wait4(void) {
 extern int sigmask_limit;
 uint64 sys_execve(void) {
     struct binprm bprm;
-    // struct proc *p = proc_current();
-    // Log("%d", p->pid);
     memset(&bprm, 0, sizeof(struct binprm));
 
     char path[MAXPATH];
@@ -173,13 +167,9 @@ uint64 sys_execve(void) {
             if (i == 1 && strcmp((char *)cp, "bw_pipe") == 0) {
                 return -1;
             }
-
-            // #include "termios.h"
-            // if (i == 1 && strcmp((char *)cp, "vi") == 0) {
-            //     extern struct termios term;
-            //     term.c_lflag = 0;
+            // if (strcmp((char *)cp, "./multi.sh") == 0) {
+            //     return -1;
             // }
-
             // if (i == 4 && (strcmp(path, "./cyclictest") == 0) && strcmp((char *)cp, "-t8") == 0) {
             //     skip++;
             //     if (skip == 2) {
@@ -322,9 +312,6 @@ uint64 sys_set_tid_address(void) {
     return t->tid;
 }
 
-uint64 sys_rt_sigsuspend(void) {
-    return 0;
-}
 // int rt_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact, size_t sigsetsize);
 // examine and change a signal action
 uint64 sys_rt_sigaction(void) {
@@ -480,7 +467,7 @@ uint64 sys_tkill() {
 
 // int tgkill(int tgid, int tid, sig_t sig);
 // tgid为目标线程所在进程的进程ID，tid为目标线程的内部线程ID，而不是全局线程ID
-uint64 sys_tgkill () {
+uint64 sys_tgkill() {
     int tgid; // equal to pid
     int tid;  // equal to tidx
     sig_t signo;

@@ -1,7 +1,6 @@
 #include "platform/hifive/uart_hifive.h"
 #include "driver/console.h"
 #include "common.h"
-#include "debug.h"
 
 volatile uarts_t *uarths = (volatile uarts_t *)UART0_BASE;
 struct uart_hifve uart;
@@ -71,23 +70,15 @@ void uart_hifive_putc_asyn(char ch) {
 }
 
 // synchronous
-#include "lib/sbi.h"
 void uart_hifive_putc_syn(char ch) {
     push_off();
-
-// #ifndef SIFIVE_B
     if (panicked) {
         for (;;)
             ;
     }
-
-    while (ReadReg_hifive(TXDATA) & TX_FULL_MASK) {
+    while (ReadReg_hifive(TXDATA) & TX_FULL_MASK)
         ;
-    }
     WriteReg_hifive(TXDATA, ch);
-// #else
-    // sbi_putchar(ch);
-// #endif
     pop_off();
 }
 

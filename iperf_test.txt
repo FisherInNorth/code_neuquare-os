@@ -1,0 +1,47 @@
+问题一：
+缺少文件/dev/urandom
+crw-rw-rw-  urandom
+/dev/random 和 /dev/urandom 是 Linux 上的字符设备文件，它们是随机数生成器，为系统提供随机数
+
+问题二：
+缺少系统调用sys_setsid
+
+
+问题三：
+系统调用sys_bind需要完善
+
+
+测试分析：
+测试1：
+iperf BASIC_UDP
+
+
+测试2：
+iperf BASIC_TCP
+
+
+测试3：
+iperf PARALLEL_UDP
+
+
+测试4：
+iperf PARALLEL_TCP
+
+
+测试5：
+iperf REVERSE_UDP
+
+
+测试6：
+iperf REVERSE_TCP
+
+
+sys_socket -> sys_setsockopt -> sys_bind  -> sys_connect -> sys_write
+
+socket :
+The domain argument specifies a communication domain
+The socket has the indicated type, which specifies the communication semantics.
+The protocol specifies a particular protocol to be used with the socket.
+
+
+

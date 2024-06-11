@@ -1,0 +1,174 @@
+./unixbench_testcode.sh
+
+lps 是指 "loops per second"（每秒循环次数）。这个值表示在执行 Unixbench 上下文测试时，系统能够每秒执行的循环次数。
+更高的循环次数意味着系统在给定时间内能够完成更多的循环操作，这通常被视为更好的性能指标。
+
+测试1[ok]：
+./dhry2reg 10
+首先就是编写 系统调用 sys_setitimer
+
+
+测试2[ok]：
+./whetstone-double 10
+直接跑可以，但是加上了busybox 的管道后就不行了？？？没有输出？？？
+
+
+测试3[ok]：
+./syscall 10
+单纯测试系统调用的速度
+用到了 sys_umask
+close、getpid、getuid、umask、dup
+
+测试4[ok]:
+./context1 10
+直接跑就不行，管道有点问题？？？
+
+还发现了list.h的一些问题，如果两次add，一定要确保结点不在目标链表中！或者最好用move
+
+测试5[ok]：
+./pipe 10 | ./busybox grep -o "COUNT|[[:digit:]]\+|" | ./busybox grep -o "[[:digit:]]\+" | ./busybox awk '{print "Unixbench PIPE test(lps): "$0}'
+疯狂从管道中读和写？？？
+程序停不下来？？？
+必须写 setitimer !
+
+测试6[ok]：
+./spawn 10
+多次fork测试
+程序停不下来？？？
+必须写 setitimer !
+
+测试7[ok]：
+UB_BINDIR=./ ./execl 10 | ./busybox grep -o "COUNT|[[:digit:]]\+|" | ./busybox grep -o "[[:digit:]]\+" | ./busybox awk '{print "Unixbench EXECL test(lps): "$0}'
+主要是测试 execl 速度
+
+
+测试8：
+Usage: fstime [-c|-r|-w] [-b <bufsize>] [-m <max_blocks>] [-t <seconds>]
+./fstime -w -t 1 -b 256 -m 500
+
+./fstime -w -t 20 -b 256 -m 500[ok]
+./fstime -r -t 20 -b 256 -m 500[ok]
+./fstime -c -t 20 -b 256 -m 500[ok]
+
+./fstime -c -t 20 -b 1024 -m 2000[ok]
+./fstime -c -t 20 -b 1024 -m 2000[ok]
+./fstime -c -t 20 -b 1024 -m 2000[ok]
+
+./fstime -c -t 20 -b 4096 -m 8000[ok]
+./fstime -c -t 20 -b 4096 -m 8000[ok]
+./fstime -c -t 20 -b 4096 -m 8000[ok]
+连续跑，磁盘空间无？？？
+pagecache 有问题！
+
+似乎停不下来？？？
+while (!sigalarm) {
+    for(f_blocks=0; f_blocks < max_buffs; ++f_blocks) {
+            if ((tmp=write(f, buf, bufsize)) != bufsize) {
+                    if (errno != EINTR) {
+                            perror("fstime: write");
+                            return(-1);
+                    }
+                    stop_count();
+                    counted += ((tmp+HALFCOUNT)/COUNTSIZE);
+            } else
+                    counted += count_per_buf;
+    }
+    lseek(f, 0L, 0); /* rewind */
+}
+还是 setitimer 没有写，所以就会一直跑？？
+
+在setitimer 写好后，发生了
+fstime: write : No error information这个错误？？？
+主要原因是返回值错误，按照测试的意义，应该是结束的时候被一个信号所打断，所以需要返回-EINTR，表示被其他的系统调用打断？
+需要修改sys_rt_sigreturn ，不能返回0！而是-EINTR！
+// return from signal handler and cleanup stack frame
+uint64 sys_rt_sigreturn(void) {
+    struct tcb *t = thread_current();
+    signal_frame_restore(t, (struct rt_sigframe *)t->trapframe->sp);
+    return -EINTR;
+}
+奇怪的是，除了-w 可以用管道输出结果外，其他的-r 、-c 都无法输出结果？？？
+
+测试9：
+./looper 20 ./multi.sh 2 [ok]
+wait 卡住了？？
+似乎不是并发问题？？单核和多核的结果是一样的
+似乎是页缓存的问题？
+./looper 20 ./multi.sh 8 
+./looper 20 ./multi.sh 16
+
+pipe 创建失败？？
+
+而且信号还唤醒不了？？？
+进程休眠了？？？需要先将其唤醒，然后发送信号？
+为什么exit 的status 都是0？？？
+
+问题一：
+./tst.sh: line 17: can't fork: Operation not permitted
+clone 返回值为-1？？？
+进程数量确实开小了？？？
+
+
+
+思考：
+这个looper程序就是创建多个子进程，每个子进程会先读取sort.src 这个文件（8546个字节？），
+然后是向文件 pid = x 的进程 向 sort.{x-2} 中连续不固定字节写入，共写入8545个字节？
+比如 pid = 7 和 pid = 8 的进程写入文件(sort.5 和 sort.6)？？
+但是 
+pid = 10 的进程 需要从 管道中读取 4290个字节？？？然后向 od.d 中写入 4290 个字节？？？
+pid = 11 的进程 需要从 sort.6 中读取1024+15 个字节？？然后向管道中写入2240个字节？？？
+pid = 9 和 pid = 11 一直没有退出？？？
+而且是在进行管道的读写？？？
+
+
+
+测试10[ok]：
+./arithoh 10
+调用 setitimer 后就会卡住？？
+需要正确实现setitimer！
+下面在这些测试也需要setitimer
+
+测试11[ok]：
+./short 10
+
+测试12[ok]：
+./int 10
+
+测试13[ok]：
+./long 10
+
+测试14[ok]：
+./float 10
+
+测试15[ok]：
+./hanoi 10
+
+测试16[ok]：
+./double 10
+
+
+测试17[ok]：
+./syscall 10 exec
+找不到文件？？
+./syscall: exec /bin/true failed
+
+exec /bin/true 只设置退出码为0，不做其他事情！
+exec /bin/false 只设置退出码为1，不做其他事情！
+
+加入特判？似乎需要正确执行？？
+if(!strncmp(path, "/bin/true", 9)) {
+  return 0;
+} else if(!strncmp(path, "/bin/fasle", 10)) {
+  return 1;
+}
+还是需要将/bin/true 拷贝到镜像中？？
+不是，它要求成功执行这个程序，将后续的
+fprintf(stderr,"%s: exec /bin/true failed\n", argv[0]);
+exit(1);
+给替换调？
+
+如果镜像中没有，那就自己编译，然后拷贝进去，
+int main(){
+  return 0;
+}
+或者将可执行文件用数组写死放在代码中。

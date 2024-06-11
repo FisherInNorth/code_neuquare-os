@@ -5,7 +5,7 @@
 PLATFORM ?= qemu_virt
 # PLATFORM ?= qemu_sifive_u
 # PLATFORM ?= board_sifive_u
-SUBMIT ?= 0
+SUBMIT ?= 1
 ###############################
 
 # debug options
@@ -39,7 +39,7 @@ TEST=user_test kalloctest mmaptest \
 	clock_gettime_test signal_test \
 	writev_test readv_test lseek_test \
 	sendfile_test renameat2_test
-BIN=ls echo cat mkdir rawcwd rm shutdown wc kill grep sh sysinfo true syscall_test
+BIN=ls echo cat mkdir rawcwd rm shutdown wc kill grep sh sysinfo true
 BOOT=init
 
 TESTFILE = $(addprefix $(FSIMG)/, $(TEST))
@@ -97,7 +97,30 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 LDFLAGS = -z max-page-size=4096
-CFLAGS = -Wall -Werror -O2 -fno-omit-frame-pointer -ggdb -gdwarf-2
+CFLAGS = -Wall -Werror -Ofast -fno-omit-frame-pointer -ggdb -gdwarf-2
+
+CFLAGS2=-O2
+OBJ_NOOPT= \
+	build/src/kernel/syscall.o \
+	build/src/kernel/trap.o \
+	build/src/kernel/sysproc.o \
+	build/src/kernel/cpu.o \
+	build/src/kernel/ioctl.o \
+	build/src/kernel/syscallnew.o \
+	build/src/kernel/sysmisc.o \
+	build/src/kernel/sysfile.o \
+	build/src/kernel/sysipc.o \
+	build/src/kernel/main.o \
+	build/src/lib/radix-tree.o \
+	build/src/lib/sbuf.o \
+	build/src/lib/sprintf.o \
+	build/src/lib/timer.o \
+	build/src/lib/hash.o \
+	build/src/lib/string.o \
+	build/src/lib/queue.o \
+	build/src/lib/printf.o \
+	build/src/lib/ctype.o \
+	build/src/lib/kcsan.o \
 
 ifdef KCSAN
 CFLAGS += -DKCSAN
@@ -181,10 +204,10 @@ SRCS = $(filter-out $(SRCS-BLACKLIST-y),$(SRCS-y))
 ##### PLATFORM ######
 
 ifeq ($(PLATFORM), qemu_virt)
-QEMUOPTS = -machine virt -bios bootloader/opensbi-qemu -kernel kernel-qemu -m 1G -smp 2 -nographic
+QEMUOPTS = -machine virt -bios bootloader/opensbi-qemu -kernel kernel-qemu -m 128M -smp 2 -nographic
 # QEMUOPTS = -machine virt -bios bootloader/opensbi-qemu -kernel kernel-qemu -m 128M -smp 1 -nographic
 ifeq ($(SUBMIT), 1)
-QEMUOPTS += -drive file=fat32.img,if=none,format=raw,id=x0
+QEMUOPTS += -drive file=sdcard.img,if=none,format=raw,id=x0
 else
 QEMUOPTS += -drive file=fat32.img,if=none,format=raw,id=x0
 endif
@@ -223,13 +246,13 @@ format:
 	clang-format -i $(filter %.c, $(SRCS)) $(shell find include -name "*.c" -o -name "*.h")
 
 # for submit
-# all: kernel-qemu
-# 	cp bootloader/opensbi-qemu ./sbi-qemu
+all: kernel-qemu
+	cp bootloader/opensbi-qemu ./sbi-qemu
 #	$(QEMU) $(QEMUOPTS)
 
 
-all: kernel-qemu image
-	$(QEMU) $(QEMUOPTS)
+# all: kernel-qemu image
+# 	$(QEMU) $(QEMUOPTS)
 
 kernel: kernel-qemu
 	$(QEMU) $(QEMUOPTS)
@@ -280,29 +303,26 @@ apps:
 # user: oscomp busybox
 user: apps
 	@echo "$(YELLOW)build user:$(RESET)"
-	@cp README.md $(FSIMG)/	
 	@make -C $(User)
 	@cp busybox/busybox $(FSIMG)/busybox
 	@mv $(BINFILE) $(FSIMG)/bin/
 	@mv $(BOOTFILE) $(FSIMG)/boot/
 	@mv $(TESTFILE) $(FSIMG)/TEST/
-	@cp support/* $(FSIMG)/ -r
 
 oscomp:
 	@make -C $(oscompU) -e all CHAPTER=7
 
 fat32.img: dep
-	@dd if=/dev/zero of=$@ bs=1M count=1024
-# @dd if=/dev/zero of=$@ bs=1K count=131072
-# @sudo mkfs.vfat -F 32 -a $@
+	@dd if=/dev/zero of=$@ bs=1K count=65536
+# @mkfs.vfat -F 32 -a $@
 	@mkfs.vfat -F 32 -s 2 -a $@ 
 	@mount -t vfat $@ $(MNT_DIR)
 	@cp -r $(FSIMG)/* $(MNT_DIR)/
-	@sync $(MNT_DIR) && umount -v $(MNT_DIR)
+	@sync $(MNT_DIR) &&  umount -v $(MNT_DIR)
 
 # for sdcard.img(local test)
 mount:
-	@mount -t vfat fat32.img mount_sd
+	@mount -t vfat sdcard.img mount_sd
 umount:
 	@umount -v mount_sd
 
@@ -312,6 +332,17 @@ submit: image
 	@rm tmp
 	@cat submit | ./scripts/convert.sh | ./scripts/code.sh > include/initcode.h
 	@rm submit
+
+qemu: kernel-qemu image
+	@qemu-system-riscv64 \
+	-machine virt \
+	-kernel kernel-qemu \
+	-m 128M -nographic -smp 2 \
+	-bios default \
+	-drive file=sdcard.img,if=none,format=raw,id=x0 \
+	-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
+	-device virtio-net-device,netdev=net \
+	-netdev user,id=net | ts "%Y-%m-%d %H:%M:%.S"\
 
 clean-all: clean
 	-@make -C $(User)/ clean

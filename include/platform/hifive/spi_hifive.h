@@ -33,36 +33,4 @@ uint8 spi_read();
 #define CSMODE_HOLD 2 // HOLD Keep CS continuously asserted after the initial frame
 #define CSMODE_OFF 3  // OFF Disable hardware control of the CS pin
 
-
-
-// Inlining header functions in C
-// https://stackoverflow.com/a/23699777/7433423
-
-/**
- * Get smallest clock divisor that divides input_khz to a quotient less than or
- * equal to max_target_khz;
- */
-
-// temporarily not used
-inline unsigned int spi_min_clk_divisor(unsigned int input_khz, unsigned int max_target_khz) {
-    // f_sck = f_in / (2 * (div + 1)) => div = (f_in / (2*f_sck)) - 1
-    //
-    // The nearest integer solution for div requires rounding up as to not exceed
-    // max_target_khz.
-    //
-    // div = ceil(f_in / (2*f_sck)) - 1
-    //     = floor((f_in - 1 + 2*f_sck) / (2*f_sck)) - 1
-    //
-    // This should not overflow as long as (f_in - 1 + 2*f_sck) does not exceed
-    // 2^32 - 1, which is unlikely since we represent frequencies in kHz.
-    unsigned int quotient = (input_khz + 2 * max_target_khz - 1) / (2 * max_target_khz);
-    // Avoid underflow
-    if (quotient == 0) {
-        return 0;
-    } else {
-        return quotient - 1;
-    }
-}
-
-
 #endif

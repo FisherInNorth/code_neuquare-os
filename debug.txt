@@ -1,0 +1,72 @@
+// for SPI
+target extended-remote 127.0.0.1:26000
+add-inferior
+inferior 2
+attach 2
+set schedule-multiple on
+symbol-file kernel-qemu
+
+b __sd_init
+b sdcard_disk_read
+c
+layout src
+
+// for PLIC
+target extended-remote 127.0.0.1:26000
+add-inferior
+inferior 2
+attach 2
+set schedule-multiple on
+symbol-file kernel-qemu
+b __sd_init
+b uart_hifive_intr
+layout src
+c
+
+// for busybox 
+target extended-remote 127.0.0.1:26000
+add-inferior
+inferior 2
+attach 2
+set schedule-multiple on
+symbol-file kernel-qemu
+b sys_nanosleep
+layout src
+c
+
+`=====开始调试...
+break main
+c   
+
+有用的gdb命令：
+1. layout src           可以查看源代码
+2. layout asm           可以查看汇编
+3. info breakpoints     或简写的 i b 来打印所有的断点信息
+4. d                    删除所有断点
+5. n                    单步执行
+6. s                    跳入函数
+7. frame                查看当前调用栈
+8. f                    结束函数的执行
+9. break                直接函数名/文件名:行号
+10. c                   跳到下一个断点
+11. shell clear         清空屏幕
+12 info thread          查看每个CPU的线程
+13. bt                  查看完整调用栈
+14. x/512               打印512个字节
+
+先在一个窗口执行 make gdb
+再在一个窗口执行 gdb-multiarch
+
+
+p/x *(unsigned int*)(0x10050000 + 0x40)
+x (unsigned int*)(0x10050000 + 0x40)
+
+vscode 快捷按键：
+crtl + k + w ， 关闭所有窗口
+crtl + shift +v , 将markdown渲染
+
+git:
+git pull --rebase origin final
+git rebase --continue
+git checkout -b [分支名]
+git rebase [分支名]

@@ -51,6 +51,7 @@ struct interpreter {
 
     uint64 elf_bss, last_bss;
     int valid;
+    // may need spinlock
 };
 
 int do_execve(char *path, struct binprm *bprm);

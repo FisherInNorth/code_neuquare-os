@@ -1,0 +1,437 @@
+调试技巧：
+在iozone的Makefile中修改如下：
+CFLAGS	?= -g
+
+去除所有编译优化的选项，修改 -O 、-O2、-O3修改为-g
+记得进入apps/iozone 执行 make clean
+
+通过设置断点 break 
+
+
+读写文件的名称为 iozone.tmp
+
+
+（1）write_perf_test 测试
+Write and re-write
+每次写入1024个字节，写两遍！
+如果传入参数 为 4m，那么就是先从0开始写入4MB，然后再次从0开始写入4MB
+
+（2）read_perf_test 测试
+Read and re-fread test
+每次读取1024个字节，读两遍！
+如果传入参数 为 4m，那么就是先从0开始读取4MB，然后再次从0开始读取4MB
+
+（3）random_perf_test 测试
+Random read and write test
+每次将f_pos 随机移动，然后读取1024个字节。
+每次将f_pos 随机移动，然后写入1024个字节。
+
+（4）reverse_perf_test 测试
+Reverse read test
+通过lseek移动f_pos从文件的末端读取，每次读取1024个字节。
+注意这里的lseek 传入的offset 是一个负数，每次都需要减去-2048
+
+do_lseek 中需要进行修改：
+MAX(0, f->f_pos)
+返回值是新的文件偏移量，不能为负数
+
+（5）rewriterec_perf_test 测试
+Re-write the same record
+反复写一个地方，即每次写完1024个字节后，用lseek将pos移动到写入前的状态
+
+（6）read_stride_perf_test 测试
+Read with a constant stride test
+每次读取1024字节，只不过不是顺序读取，而是以 17KB 为一个stride进行移动
+即f_pos : 0 -> 17408 -> 34816 -> ...
+
+需要注意的是每次写入的前8个字节都是 
+70 70 70 70 70 70 70 70
+即每次写入的1024个字节的前8个字节都是 0x70 70 70 70 70 70 70 70
+
+iozone.tmp 的起始地址为：
+2113000
+
+
+（7）fwrite_perf_test
+fWrite and fre-write test
+使用writev 进行写操作，每次1024个字节
+
+
+（8）fread_perf_test 测试
+fRead and fre-read test
+使用readv 进行读操作，每次1024个字节
+
+
+
+问题一：
+在iozone目录下直接 iozone 会查找环境变量，需要在init中的环境变量中加入iozone
+char *envp[] = {"PATH=/oscomp:/bin:/test:/busybox:/iozone", 0};
+
+问题二：
+iozone -a -r 1k -s 4m 
+运行这个语句出现了
+lseek : Operation not permitted
+Strace 的lseek的返回值也是-1,显然是不正确的
+需要将    arglong(1, &offset) 判断返回值小于0去掉，offset可以为负数
+
+openat iozone.tmp 的epc为：5a2d8 （去掉所有编译选项后的地址）
+
+问题三：
+read_stride_perf_test 测试过不了：
+出现的bug主要是do_generic_file_write存在一定的问题，修改如下：
+if(WRITE_FULL_PAGE(retval)||OUT_FILE(offset, isize_offset)){
+    // need read page in disk
+    read_from_disk = 0;
+} else {
+    // panic("not tested\n");
+    read_from_disk = 1;
+}
+
+write/read
+iozone -t 4 -i 0 -i 1 -r 1k -s 1m
+顺序写+顺序读
+
+random-read
+iozone -t 4 -i 0 -i 2 -r 1k -s 1m
+顺序写+随机读
+
+read-backwards
+iozone -t 4 -i 0 -i 3 -r 1k -s 1m
+顺序写+反向读
+
+stride-read
+iozone -t 4 -i 0 -i 5 -r 1k -s 1m
+顺序写+跳跃读
+
+
+（1）multi_throughput_test
+
+
+问题一：
+[PAGEFAULT]: va is not in the vmas
+usertrap(): process name: iozone pid: 3
+scause 000000000000000f STORE/AMO PAGEFAULT
+sepc=0000000000058922
+stval=0000000000000008
+
+原因是：
+sys_shmget、sys_shmat 和 sys_mctl 没有实现
+
+shmget 的用户地址： 0x5086a
+
+第一步：
+shmid=(int)shmget((key_t)(IPC_PRIVATE), (size_t)size1 , (int)(IPC_CREAT|0666));
+
+可以看出是创建一个private 的ipc
+size1 为 0x2000， 两个页的大小
+
+第二步：
+addr = (char *)shmat((int)shmid, 0, 0);
+
+addr 和 flag 都是0
+
+第三步：
+shmctl(shmid, IPC_RMID, 0);
+删除共享存储段
+
+
+问题二：
+测试调用了pselect6 ，所以需要先写好pselect6
+用户态地址： 0x5a2d8
+
+while(child_stat->flag!=CHILD_STATE_BEGIN)   /* Wait for signal from parent */
+    Poll((long long)1);
+
+#ifdef HAVE_ANSIC_C
+void Poll(long long time1)
+#else
+void Poll(time1)
+long  long time1;
+#endif
+{
+	struct timeval howlong;
+	howlong.tv_sec=(int)(time1/100000);
+	howlong.tv_usec=(int)(time1%100000); /* Get into u.s. */
+	select(0, 0, 0, 0, &howlong);
+}
+
+
+问题三：
+父子进程之间共用一个共享内存？？
+clone的用户态地址：
+56070
+
+
+for(xyz=0;xyz<num_child;xyz++){ /* all children to state 0 (HOLD) */
+    child_stat = (struct child_stats *)&shmaddr[xyz];
+    child_stat->flag=CHILD_STATE_HOLD;
+    child_stat->actual=0;
+    child_stat->throughput=0;
+    child_stat->cputime=0;
+    child_stat->walltime=0;
+}
+
+问题四：
+子进程无法停止？？
+子：
+while(child_stat->flag!=CHILD_STATE_BEGIN)   /* Wait for signal from parent */
+    Poll((long long)1);
+
+父：
+while(child_stat->flag==CHILD_STATE_HOLD)
+    Poll((long long)1);
+
+
+父进程一直没有给子进程发送信号？？？
+
+父进程clone的用户地址：
+0x5b61c
+
+
+#ifdef HAVE_ANSIC_C
+long long
+start_child_proc(int testnum,long long numrecs64, long long reclen)
+#else
+long long
+start_child_proc(testnum, numrecs64, reclen)
+int testnum;
+long long numrecs64, reclen;
+#endif
+{
+	long long x;
+	if(distributed && master_iozone)
+	{
+		x=(long long)pick_client(testnum,numrecs64, reclen);
+	}
+	else
+	{
+		x=(long long)fork();
+	}
+	if(mdebug)
+		printf("Starting proc %d\n",(int)x);	
+	return(x);
+}
+
+原因：共享内存没有写正确，子进程已经对共享内存的内容进行了操作，
+但是父进程没有正确反应？？
+
+
+解决：
+如果不是VMA_FILE类型或者是不是PERM_SHARED不能copy-on-write
+if (pos->type != VMA_FILE || !(pos->perm & PERM_SHARED)) {
+    if ((*pte & PTE_W) == 0 && (*pte & PTE_SHARE) == 0) {
+        *pte = *pte | PTE_READONLY;
+    }
+    /* shared page */
+    if ((*pte & PTE_W) == 0 && (*pte & PTE_READONLY) != 0) {
+        *pte = *pte | PTE_READONLY;
+    }
+    *pte = *pte | PTE_SHARE;
+    *pte = *pte & ~PTE_W;
+}
+
+
+问题五：
+并发写
+出现了 panic("sched locks"); 这个错误，又是什么锁没有释放？？
+
+调用write 的用户态地址：
+0x5a478
+
+测试创建了4个进程，并发向4个文件写入内容，文件名称为:
+iozone.DUMMY.0 ~ iozone.DUMMY.3
+每次写入1024个字节？
+
+总共写入1048576个字节？？
+即1MB
+
+然后，测试再次创建4个进程，同时写
+即进行了两次并发写的操作。
+
+然后，测试再次创建4个进程，同时读
+还是一次读取1024个字节，总共读取1MB。
+
+最后，测试再次创建4个进程，同时读
+
+
+问题六：
+程序卡住???
+4个子进程分别向4个文件中写入内容，然后close，只有一个进程成功地close了，其他的进程似乎都没有正常进行close？？
+
+在fat32_inode_put 中没有正确地释放parent的锁
+
+
+问题七：
+发生了 panic： filewrite
+主要原因是通过共享内存创建的文件没有设置正确的文件类型？？
+主要原因是共享内存创建的文件提前进行了close，将类型设置为了FD_NONE？？
+所以进行uvmfree 的时候不需要进行写回！
+
+
+问题八：
+发送了 panic: generic_fileclose
+主要原因是 进程在进行exit 的时候已经释放了所有的ofile，共享内存对应的文件也被close了？？
+在vmspace_unmap 又对这个文件进行close就发生了错误。
+
+
+
+busybox echo iozone throughput fwrite/fread measurements
+iozone -t 4 -i 6 -i 7 -r 1k -s 1m
+随机读取和随机写入
+
+
+
+busybox echo iozone throughput pwrite/pread measurements
+iozone -t 4 -i 9 -i 10 -r 1k -s 1m
+测试出现问题，需要编写pwrite64这个系统调用
+
+
+busybox echo iozone throughtput pwritev/preadv measurements
+iozone -t 4 -i 11 -i 12 -r 1k -s 1m
+
+
+
+补充：
+通过连续测试iozone 和 unixbench发现系统存在严重的磁盘空间泄漏，在测试一些大文件的读写过程中竟然发现磁盘空间不足？？？
+发现这个语句一直没有执行？？？
+if (ip->valid && ip->i_nlink == 0) {
+    fat32_inode_lock(ip);
+    release(&inode_table.lock);
+
+    fat32_inode_trunc(ip);
+    // ip->dirty_in_parent = 1;
+    // fat32_inode_update(ip);
+
+    fat32_inode_unlock(ip);
+    acquire(&inode_table.lock);
+}
+
+并且需要在 fat32_inode_trunc中添加：
+sema_wait(&fat32_sb.sem);
+fat32_sb.fat32_sb_info.free_count+= ip->fat32_i.cluster_cnt;
+sema_signal(&fat32_sb.sem);
+
+
+内存泄漏？
+shp = kzalloc(sizeof(struct shmid_kernel)); 没有回收？
+if ((sfd = (struct shm_file_data *)kzalloc(sizeof(struct shm_file_data))) == 0) {
+    panic("no free memory\n");
+}
+没有回收？
+ids->key_ht = (struct hash_table *)kmalloc(sizeof(struct hash_table)); 没有回收？
+socket 得 sbuf没有回收
+
+
+系统初始化内存消耗？
+. 内核页表kpgtbl
+. kvmmap 进行内存映射
+. 给每个线程分配内核栈
+. tid_map、pid_map和futex_map三个全局hash表的初始化
+. 内存中bit_map和fat_table的初始化
+
+
+大内存分配？
+busybox会4次调用sendfile，每次都是需要分配4096个page
+
+
+所有可能用到 kzalloc、 kmalloc 或者 kmalloc 的地方：
+1. inode hash 表初始化
+dp->i_hash = (struct hash_table *)kmalloc(sizeof(struct hash_table));
+2. inode hash 的value 结点初始化
+struct inode_cache *c = (struct inode_cache *)kmalloc(sizeof(struct inode_cache));
+3. long entry 栈初始化
+stack->data = (elemtype *)kmalloc(30 * 32);
+4. ipc 的hash表初始化
+ids->key_ht = (struct hash_table *)kmalloc(sizeof(struct hash_table));
+5. readv 的 缓冲区初始化 
+if ((kbuf = kmalloc(totsz)) == 0) {
+    goto bad;
+}
+6. hash table inode 的初始化
+node_new = (struct hash_node *)kmalloc(sizeof(struct hash_node));
+7. sbuf 的初始化
+sp->buf = (char *)kmalloc(sizeof(char) * n);
+8. cow 的大页分配 
+if ((mem = kmalloc(SUPERPGSIZE)) == 0) {
+    return -1;
+}
+9. cow 的普通页分配
+if ((mem = kmalloc(PGSIZE)) == 0) {
+    return -1;
+}
+10. 分配elf头结构体
+Elf64_Ehdr *elf_ex = kmalloc(sizeof(Elf64_Ehdr));
+11. elf data
+elf_phdata = kmalloc(size);
+12. 
+paddr_t pa = (paddr_t)kmalloc(PGSIZE);
+13. 线程内核栈的分配
+char *pa = kmalloc(KSTACK_PAGE * PGSIZE);
+14. futex结构体的分配
+struct futex *fp = (struct futex *)kzalloc(sizeof(struct futex));
+15. 页缓存 page 分配
+pa = (uint64)kzalloc(PGSIZE * (end_idx - start_idx))
+16. 页缓存 page item 分配 （读磁盘）
+p_item = (struct Page_item *)kzalloc(sizeof(struct Page_item))
+17. 页缓存 page item 分配 （写磁盘）
+p_item = (struct Page_item *)kzalloc(sizeof(struct Page_item))
+18. bit map 分配 和 内存FAT 表的分配
+idx_page = (uint64)kzalloc(PGSIZE * n)
+19. fcb 字符数组缓存分配, copy
+uchar *fcb_char = kzalloc(fcb_char_len);
+20. fcb 字符数组缓存分配，create
+uchar *fcb_char = kzalloc(FCB_MAX_LENGTH);
+21. bio vec 的分配
+vec_cur = (struct bio_vec *)kzalloc(sizeof(struct bio_vec))
+22. i_mapping 的分配
+struct address_space *mapping = kzalloc(sizeof(struct address_space));
+23. 目录 travel 的缓冲区分配
+(kbuf = kzalloc(sz)) == 0
+24. shared memory 结构体分配
+shp = kzalloc(sizeof(struct shmid_kernel))
+25. send_file 缓冲区分配
+kbuf = kzalloc(count)
+26. getdents 缓冲区分配
+kbuf = kzalloc(sz)
+27. writev 缓冲区分配
+kbuf = kzalloc(totsz)
+28. shared memory data
+sfd = (struct shm_file_data *)kzalloc(sizeof(struct shm_file_data))
+29. hash表的entry分配
+table->hash_head = (struct hash_entry *)kzalloc(table->size * sizeof(struct hash_entry));
+30. radix tree 的结点分配
+ret = (struct radix_tree_node *)kzalloc(sizeof(struct radix_tree_node));
+31. mm 结构体分配
+mm = kzalloc(sizeof(struct mm_struct));
+32. 内核页表分配
+pagetable_t kpgtbl = (pagetable_t)kzalloc(PGSIZE);
+33. 三级页表的分配
+pagetable = (pde_t *)kzalloc(PGSIZE)
+34. 用户页表的分配
+pagetable = (pagetable_t)kzalloc(PGSIZE);
+35. uvmalloc 的物理页分配
+mem = kzalloc(PGSIZE);
+mem = kzalloc(SUPERPGSIZE);     
+mem = kzalloc(PGSIZE);  
+36. uvmcopy 的物理页分配
+paddr_t new = (paddr_t)kzalloc(PGSIZE);
+37. uvm_thread_stack 线程栈的分配
+paddr_t pa = (paddr_t)kzalloc(PGSIZE);
+38. uvm_thread_trapframe 线程trapframe的分配
+paddr_t pa = (paddr_t)kzalloc(PGSIZE);
+39. load_elf_binary
+void *pa = kzalloc(PGSIZE);
+40. uvminit
+mem = kzalloc(PGSIZE);  
+41. 信号的处理handler 分配
+t->sig = (struct sighand *)kzalloc(sizeof(struct sighand))
+42. root inode 的分配
+struct inode *root_ip = (struct inode *)kalloc();
+43. 管道的分配
+pi = (struct pipe *)kalloc();
+44. 信号处理队列结点的分配
+q = (struct sigqueue *)kalloc()
+45. 线程组的分配
+p->tg = (struct thread_group *)kalloc()
+46. ipc namespace 的分配
+p->ipc_ns = (struct ipc_namespace *)kalloc()

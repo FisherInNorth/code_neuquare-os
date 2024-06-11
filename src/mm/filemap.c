@@ -294,9 +294,9 @@ ssize_t do_generic_file_write(struct address_space *mapping, int user_src, uint6
         // set page dirty
         // set_page_flags(page, PG_dirty);// NOTE!!!
 
-        acquire(&mapping->host->tree_lock);
-        radix_tree_tag_set(&mapping->page_tree, index, PAGECACHE_TAG_DIRTY);// NOTE!!!
-        release(&mapping->host->tree_lock);
+        // acquire(&mapping->host->tree_lock);
+        // radix_tree_tag_set(&mapping->page_tree, index, PAGECACHE_TAG_DIRTY);// NOTE!!!
+        // release(&mapping->host->tree_lock);
 
         // put and release (don't need it, maybe?)
         // page_cache_put(page);

@@ -1,0 +1,12 @@
+第一步：
+完成映射
+kvmmap(kpgtbl, UART0_BASE, UART0_BASE, PGSIZE, PTE_R | PTE_W, COMMONPAGE);
+
+第二步：
+修改同步写uart txdata 寄存器
+
+
+问题一：
+在hart_start()之后printf没有输出？？？
+明明是5个核，为什么只有4个核输出？
+

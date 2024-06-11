@@ -24,7 +24,7 @@
 
 /* configuration option */
 /* Note: to support 2MB superpage, (PHYSTOP - START_MEM) need to be (NCPU * 2MB) aligned! */
-#define START_MEM 0x82800000
+#define START_MEM 0x80800000
 #define BUDDY_MAX_ORDER 13
 
 #define NPAGES (((PHYSTOP)-START_MEM) / (PGSIZE))

@@ -133,6 +133,3 @@
 233 madvise sys_madvise
 154 setpgid sys_setpgid
 155 getpgid sys_getpgid
-133 rt_sigsuspend sys_rt_sigsuspend
-53 fchmodat sys_fchmodat
-167 prctl sys_prctl

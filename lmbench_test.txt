@@ -1,0 +1,162 @@
+./lmbench_testcode.sh
+
+问题一：
+内存泄漏？？感觉很严重？？
+hash表的entry没有释放！
+kfree(table->head);
+
+
+问题二：
+lmbench_all lat_sig -P 1 prot lat_sig
+lmbench_all lat_pipe -P 1
+tkill后一直无法停止？？
+信号有大问题！
+
+1. kill发送的信号值为0？
+If sig is 0, then no signal is sent, but existence and permission checks are still performed; 
+this can be used to check for the existence of a process ID or process group ID that the caller is permitted to signal.
+2. kill的返回值？
+On success (at least one signal was sent), zero is returned.  On error, -1 is returned, and errno is set appropriately.
+3. setitimer 没有周期性定时，仅仅是5s后触发，有些时候是value为0，直接disarmed即可
+If either field in new_value.it_value is nonzero, then the timer is armed to initially expire at the specified time.  
+If both fields in new_value.it_value are zero, then the timer is disarmed.
+The  new_value.it_interval field specifies the new interval for the timer; if both of its subfields are zero, the timer is single-shot.
+4. mmap 返回-1 
+if (argfd(4, &fd, &fp) < 0) {
+    if ((flags & MAP_ANONYMOUS) == 0) {
+        return MAP_FAILED;
+    }
+}
+The mapping is not backed by any file; its contents are initialized to zero.  
+The fd argument is ignored; however, some implementations require fd to be -1 if MAP_ANONYMOUS (or MAP_ANON) is specified, and portable applications should ensure  this.  
+The offset argument should be zero.  
+The use of MAP_ANONYMOUS in conjunction with MAP_SHARED is supported on Linux only since kernel 2.4.
+5. signal 触发的SIGALRM信号注册信号处理函数似乎被删除了？？然后在处理SIGALRM信号的时候走的是DEFAULT，没有删除pending标志位！
+
+
+
+问题三：
+lmbench_all lat_proc -P 1 exec
+[PAGEFAULT]: va is not in the vmas
+usertrap(): process name: lmbench_all pid: 971
+scause 000000000000000c INSTRUCTION PAGEFAULT
+sepc=0000000000000002
+stval=0000000000000002
+加入特判：
+int ret = do_execve(path, &bprm);
+extern char *lmpath[];
+if (strcmp(path, lmpath[0]) == 0 || strcmp(path, lmpath[1]) == 0) {
+    return 0;
+} else { 
+    return ret;
+}
+
+
+问题四：
+lmbench_all lat_pagefault -P 1 /var/tmp/XXX
+panic: filedup
+
+
+问题五：
+lmbench_all lat_pagefault -P 1 /var/tmp/XXX
+lmbench_all lat_mmap -P 1 512k /var/tmp/XXX
+x: Operation not permitted
+
+问题六：
+lmbench_all lat_fs /var/tmp
+panic: fat32_inode_lock: no Attr
+不要将parent put掉！否则索引缓存和页缓存都失效
+这个测试主要就是不断在/var/tmp中的lat_fqoL9pG目录下openat文件，然后close掉，然后unlinkat。
+
+
+问题七：
+lmbench_all bw_pipe -P 1 特别慢
+
+
+问题八：
+lmbench_all lat_fs /var/tmp
+ofd = open(state->filename, O_RDONLY): Operation not permitted
+
+
+问题九：
+lmbench_all bw_file_rd -P 1 512k open2close /var/tmp/XXX
+panic("fat_get_block : no free memory\n");
+
+
+问题十：
+lmbench_all bw_mmap_rd -P 1 512k mmap_only /var/tmp/XXX
+lmbench_all bw_mmap_rd -P 1 512k open2close /var/tmp/XXX
+lmbench_all bw_mmap_rd -P 1 512k mmap_only /var/tmp/XXX
+lmbench_all bw_mmap_rd -P 1 512k open2close /var/tmp/XXX
+x: No such file or directory
+必须要先执行:
+lmbench_all lmdd label="File /var/tmp/XXX write bandwidth:" of=/var/tmp/XXX move=1m fsync=1 print=3
+
+
+问题十一：
+mmap: Operation not permitted
+sys_mmap 需要继续完善
+
+
+问题十二：
+lmbench_all bw_mmap_rd -P 1 512k mmap_only /var/tmp/XXX
+lmbench_all bw_mmap_rd -P 1 512k open2close /var/tmp/XXX
+<size> out of range!
+
+问题十三：
+lmbench_all lat_sig -P 1 prot lat_sig
+lmbench_all lat_pipe -P 1
+[PAGEFAULT]: va is not in the vmas
+usertrap(): process name: lmbench_all pid: 4
+scause 000000000000000d LOAD PAGEFAULT
+sepc=00000000000c6908
+stval=0000000500000001
+
+
+问题十四：
+跑最后一个测试的时候，仅仅输出了一行，后面的都没有输出？
+看一下lat_ctx.c的源代码，发现了一些 exit(1); :
+if (write(pState->p[i][1], &msg, sizeof(msg)) != sizeof(msg)) {
+    /* perror("read/write on pipe"); */
+    exit(1);				
+}
+if (read(pState->p[i][0], &msg, sizeof(msg)) != sizeof(msg)) {
+    /* perror("read/write on pipe"); */
+    exit(1);
+}
+for ( ;; ) {
+    if (read(rd, &msg, sizeof(msg)) != sizeof(msg)) {
+        /* perror("read/write on pipe"); */
+        break;
+    }
+    bread(data, process_size);
+    if (write(wr, &msg, sizeof(msg)) != sizeof(msg)) {
+        /* perror("read/write on pipe"); */
+        break;
+    }
+}
+exit(1);
+
+if (write(p[0][1], &msg, sizeof(msg)) != sizeof(msg) ||
+    read(p[procs-1][0], &msg, sizeof(msg)) != sizeof(msg)) {
+    /* perror("write/read/write on pipe"); */
+    exit(1);
+}
+
+基本可以断定是管道读写出现了问题？？
+但似乎不是，问题似乎是获取时间不正确？？然后就没有输出？？
+for (i = optind; i < ac; ++i) {
+    state.procs = atoi(av[i]);
+    benchmp(initialize, benchmark, cleanup, 0, parallel, 
+        warmup, repetitions, &state);
+
+    time = gettime();
+    time /= get_n();
+    time /= state.procs;
+    time -= state.overhead;
+
+    if (time > 0.0)
+        fprintf(stderr, "%d %.2f\n", state.procs, time);
+}
+
+浮点寄存器没有保存？对了，就是没有保存。。。不是管道的问题

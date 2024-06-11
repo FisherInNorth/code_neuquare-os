@@ -1,0 +1,418 @@
+调试用户程序的技巧：
+比如调试测试文件stat.c
+vscode在gdb中输入：
+-exec file fsimg/libc-test/entry-static.exe
+-exec break stat_main
+即可跳转到这个用户程序进行debug
+
+
+./runtest.exe -w entry-static.exe fdopen
+问题一：
+创建文件 /tmp/a 需要是合法的，即支持递归创建
+解决1：
+直接mkdir 一个 /tmp（可能评测机上的sdcard镜像没有/tmp目录，但是linux上有/tmp目录）
+解决2：
+在系统初始化的时候在 / 中创建一个 /tmp
+比如在init.c中创建一个目录即可。（或者在内核中创建一个目录）
+问题二：
+fat32_fcb_delete中的
+ASSERT(off-long_dir_len>=0) 少写了一个等号
+[ok]
+
+
+./runtest.exe -w entry-static.exe fscanf 
+busybox sh busybox/busybox_testcode.sh
+问题一：
+管道 read 之后就卡住了，原因是管道仅仅写入了13个字符，但是read 需要读取1024个字符，管道中没有1024个字符，所以读者（消费者没有被唤醒）
+已经解决：
+在sbuf_remove中添加
+if(sp->r == sp->w && sp->w!=0) {
+    return 1; 
+}// bug!!!
+
+问题二：
+writev 卡住，在获取inode 的锁的时候卡住，两次获取一个锁
+解决：
+在writev 的if结尾加一个unlock
+if (f->f_type == FD_INODE) {
+    struct inode *ip;
+    ip = f->f_tp.f_inode;
+    ip->i_op->ilock(ip);
+    if (S_ISDIR(ip->i_mode)) {
+        // writev 不应该写目录
+        ip->i_op->iunlock(ip);
+        return -1;
+    }
+    ip->i_op->unlock(ip); // 忘记写了
+}
+问题三：
+[PAGEFAULT]: va is not in the vmas， 访问非法内存
+[ok]
+
+
+
+./runtest.exe -w entry-static.exe setjmp
+似乎是信号相关的测试（主要是sigprocmask），报错的原因是：
+src/functional/setjmp.c:62: sigismember(&set2, SIGUSR1)==1 failed: siglongjmp incorrectly restored mask
+没有保存正确的mask
+似乎是SIG_SETMASK没有设置正确
+应该是下面的这三个
+#define SIG_BLOCK          0	/* for blocking signals */
+#define SIG_UNBLOCK        1	/* for unblocking signals */
+#define SIG_SETMASK        2	/* for setting the signal mask */
+还有就是一些小bug，比如：
+copyout 写成了 copyin
+t->blocked.sig = set->sig; 写成了  t->blocked = *set;
+
+
+./runtest.exe -w entry-static.exe stat 
+问题一：
+似乎是获取文件信息的时间字段没有填充导致无法通过测试：
+TEST(st.st_ctime<=t, "%jd > %jd\n", (intmax_t)st.st_ctime, (intmax_t)t);
+TEST(st.st_mtime<=t, "%jd > %jd\n", (intmax_t)st.st_mtime, (intmax_t)t);
+TEST(st.st_atime<=t, "%jd > %jd\n", (intmax_t)st.st_atime, (intmax_t)t);
+加上st_ctime、st_mtime和st_atime的赋值即可
+
+问题二：
+TEST(stat("/dev/null",&st)==0, "errno = %s\n", strerror(errno))出错
+原因是系统中没有创建/dev/null 这个设备文件，我们在init.c中初始化的时候初始化一个即可
+
+在linux的 /dev中 ls -lh | less 搜索 null和 zero可以发现这两个问题是可读、可写、并且都是字符设备
+crw-rw-rw-   1 root       root      1,     3  7月  3 17:32 null
+crw-rw-rw-   1 root       root      1,     5  7月  3 17:32 zero
+下面是作为console的tty文件：
+crw--w----   1 root       tty       5,     1  7月  3 17:32 console
+需要注意的是，只需要mknod即可，不要用openat！
+// for /dev/null
+mknod("/dev/null", S_IFCHR, DEV_NULL << 8);
+// for /dev/zero
+mknod("/dev/zero", S_IFCHR, DEV_ZERO << 8);
+
+问题三：
+报如下的错误：
+src/functional/stat.c:36: st.st_gid==getegid() failed: 0 vs 0
+这次似乎是sys_fstat的问题
+发现是sys_getgid、sys_getegid和i_gid、i_uid设置不匹配导致的，改过来就好了。
+
+问题四：
+运行第二遍出现错误
+开启strace就出现错误？？？关闭strace就没有错误？？
+src/functional/stat.c:20: st.st_nlink>0 failed: 0
+但是在内核中输出的n_link 是1，和用户态的结果不一致
+主要原因是内核中定义的结构体类型和用户程序定义的结构体类型不一致，这里需要注意i_ino 在非x86架构下是uint32，不能写成uint64
+最好将下面这些字段的类型统一
+typedef unsigned long int dev_t;
+typedef unsigned long int ino_t;
+typedef unsigned int nlink_t;
+typedef unsigned int uid_t;
+typedef unsigned int gid_t;
+typedef long int blksize_t;
+typedef long int blkcnt_t;
+typedef unsigned int mode_t;
+
+
+
+./runtest.exe -w entry-static.exe daemon_failure
+问题：
+src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 1
+内核中的函数没有正确返回EMFILE这个错误码
+在内核中凡是文件描述符用完了的地方改为 return -EMFILE即可
+
+
+
+./runtest.exe -w entry-static.exe ftello_unflushed_append
+似乎是sys_lseek的错误:
+src/regression/ftello-unflushed-append.c:34: ftello is broken before flush: got 3, want 7
+主要原因是
+f = fdopen(fd, "a") 这个语句没有在内核中生效，没有成功设置f_pos为文件的末尾
+这就需要弄清楚fdopen中调用了什么系统调用：
+if (*mode == 'a') {
+    int flags = __syscall(SYS_fcntl, fd, F_GETFL);
+    if (!(flags & O_APPEND))
+        __syscall(SYS_fcntl, fd, F_SETFL, flags | O_APPEND);
+    f->flags |= F_APP;
+}
+即先通过fcntl获取文件的属性，查看是否有O_APPEND属性，如果没有那么就再次调用fcntl设置文件的属性含有O_APPEND
+最后还发现了inode_create的一些bug，就是在create后不能用unlock_put(dp)，而是用unlock()即可，不然ip->parent就不在内存中，那么page cache就失效了
+
+最后的解决办法就是将inode_create 和 namex统一起来，加上create_cnt和create_first字段表示某个inode 调用了create多少次，某个inode是否是通过create获取，在返回的时候确保
+ip的parent是在内存中有效的。
+
+
+./runtest.exe -w entry-static.exe lseek_large
+报下面这个错误：
+src/regression/lseek-large.c:24: lseek(fd, 0x80000000, SEEK_SET) got 0xffffffffffffffff
+似乎是变量类型错误
+主要原因是 f_pos 写成了uint32 ，应该改为 off_t，即long
+还有就是sys_lseek 中获取的offset写成了这个：
+if (argint(1, (int *)&offset) < 0) {
+    return -1;
+}
+应该用arglong ：
+if (arglong(1, &offset) < 0) {
+    return -1;
+}
+
+
+./runtest.exe -w entry-static.exe statvfs
+需要注意的是statfs的结构体定义一定要正确，否则会发生copyout错误的情况：
+struct statfs {
+	unsigned long f_type, f_bsize;
+	fsblkcnt_t f_blocks, f_bfree, f_bavail;
+	fsfilcnt_t f_files, f_ffree;
+	fsid_t f_fsid;
+	unsigned long f_namelen, f_frsize, f_flags, f_spare[4];
+};
+
+
+./runtest.exe -w entry-static.exe syscall_sign_extend
+虽然我们在 init.c 中添加了/dev/null 和 /dev/zero，但是语义实现有问题
+
+/dev/null（空设备文件或黑洞文件）是一个特殊的设备文件，所有写入其中的数据，都会被丢弃的无影无踪，
+/dev/null通常被用于丢弃不需要的数据输出，或作为用于输入流的空文件。
+和/dev/null类似，/dev/zero也是一个特殊的字符设备文件，当我们使用或读取它的时候，它会提供无限连续不断的空的数据流（特殊的数据格式流）
+
+null： write n 个字符， 返回 n， 不需要任何操作，read n 个 字符，返回0，不需要任何操作
+类别为一个黑洞，写n个字符就吞n个字符，不会保存，但返回值为n（的确写了，但是消失了）；黑洞只写，不读（无法逃离黑洞）
+zero： write n 个字符， 返回 0， 不需要任何操作，read n 个 字符，返回n，返回n个zero
+类别为一个空字符生成自动机，读n个字符就返回n个空字符，返回n（的确读了，但是为空字符）；生成自动机只读，不写（没有保存的空间）
+
+
+
+./runtest.exe -w entry-static.exe pthread_cancel_points
+需要注意这个文件的源代码文件是pthread_cancel-points!!!不是下划线，是短横杆！
+
+第一次tkill的用户态地址： 
+4610e
+pagefault 的地址：
+44efc
+线程的sig一定要用ref进行计数！
+
+报下面这个错误：
+[PAGEFAULT]: va is not in the vmas
+usertrap(): process name: entry-static.exe pid: 4
+scause 000000000000000d LOAD PAGEFAULT
+sepc=0000000000044efc
+stval=00000000000000b0
+
+这个sepc是handler中某条指令的地址！
+static void cancel_handler(int sig, siginfo_t *si, void *ctx)
+{
+	pthread_t self = __pthread_self();
+	ucontext_t *uc = ctx;
+	uintptr_t pc = uc->uc_mcontext.MC_PC;
+
+	a_barrier();
+	if (!self->cancel || self->canceldisable == PTHREAD_CANCEL_DISABLE) return;
+
+	_sigaddset(&uc->uc_sigmask, SIGCANCEL);
+
+	if (self->cancelasync) {
+		pthread_sigmask(SIG_SETMASK, &uc->uc_sigmask, 0);
+		__cancel();
+	}
+
+	if (pc >= (uintptr_t)__cp_begin && pc < (uintptr_t)__cp_end) {
+		uc->uc_mcontext.MC_PC = (uintptr_t)__cp_cancel;
+#ifdef CANCEL_GOT
+		uc->uc_mcontext.MC_GOT = CANCEL_GOT;
+#endif
+		return;
+	}
+
+	__syscall(SYS_tkill, self->tid, SIGCANCEL);
+}
+再执行第一行的时候就发生了异常，但不是缺页异常！而是访问tp寄存器就出现了问题？
+cancel_handler 的第一条指令的地址是： 0x44ef0
+原因是a2寄存器没有赋值，改过来就好了：
+tf->a2 = tf->tp;        /* a2: ucontext pointer */
+
+然后程序卡住了？？？
+似乎是调用了ecall进入了内核呀
+一个线程已经退出，一个线程通过futex_wait进行等待，一直没有被唤醒？？？
+
+exit 的指令地址：
+epc : 0x45920
+
+0x45e76 ？？？
+
+为什么程序一直卡住？？一个进程clone出了一个线程，但是线程退出了，另一个线程仍然在wait？？
+
+CLONE_CHILD_CLEARTID
+Clear (zero) the child thread ID at the location pointed to by child_tid (clone()) or cl_args.child_tid (clone3()) in child memory when the child exits, and
+do a wakeup on the futex at that address.  The address involved may be changed by the set_tid_address(2) system call.  This is used by threading libraries.
+
+CLONE_CHILD_SETTID
+Store the child thread ID at the location pointed to by child_tid (clone()) or cl_args.child_tid (clone3()) in the child's memory.  The store operation com‐
+pletes  before  the  clone  call returns control to user space in the child process.  (Note that the store operation may not have completed before the clone
+call returns in the parent process, which will be relevant if the CLONE_VM flag is also employed.)
+For each thread, the kernel maintains two attributes (addresses) called set_child_tid and clear_child_tid.  These two attributes contain the value NULL by default.
+
+set_child_tid
+If a thread is started using clone(2) with the CLONE_CHILD_SETTID flag, set_child_tid is set to the value passed in the ctid argument of that system call.
+When set_child_tid is set, the very first thing the new thread does is to write its thread ID at this address.
+
+
+clear_child_tid
+If a thread is started using clone(2) with the CLONE_CHILD_CLEARTID flag, clear_child_tid is set to the value passed in the ctid argument of that system call.
+The system call set_tid_address() sets the clear_child_tid value for the calling thread to tidptr.
+When  a thread whose clear_child_tid is not NULL terminates, then, if the thread is sharing memory with other threads, then 0 is written at the address specified in clear_child_tid and
+the kernel performs the following operation:
+futex(clear_child_tid, FUTEX_WAKE, 1, NULL, NULL, 0);
+The effect of this operation is to wake a single thread that is performing a futex wait on the memory location.  Errors from the futex wake operation are ignored.
+
+
+
+
+./runtest.exe -w entry-static.exe pthread_cancel 
+
+出现下面这个错误？？？
+src/functional/pthread_cancel-points.c:144: res != PTHREAD_CANCELED failed (shm_open, canceled thread exit status)
+
+./runtest.exe -w entry-static.exe pthread_cond 
+用户态地址：0x39300
+./runtest.exe -w entry-static.exe pthread_tsd 
+
+
+./runtest.exe -w entry-static.exe pthread_robust_detach
+又是futex_wait后就没有唤醒？？程序卡住？
+
+./runtest.exe -w entry-static.exe pthread_cancel_sem_wait
+./runtest.exe -w entry-static.exe pthread_cond_smasher [sleeping error]
+./runtest.exe -w entry-static.exe pthread_condattr_setclock
+./runtest.exe -w entry-static.exe pthread_exit_cancel
+./runtest.exe -w entry-static.exe pthread_once_deadlock
+./runtest.exe -w entry-static.exe pthread_rwlock_ebusy
+
+共性的问题：munmap的时候size < len？？？
+在vmspace_unmap的最后加上：
+if (size < len) {
+	// print_vma(&mm->head_vma);
+	// size < len: in case the vma has split before
+	vmspace_unmap(mm, va + size, len - size);
+}
+
+
+
+
+./runtest.exe -w entry-static.exe utime
+TODO ： sys_utimensat 需要实现
+
+时间戳可以按下列4种方式之一进行指定。
+（1）如果times参数是一个空指针，则访问时间和修改时间两者都设置为当前时间。
+（2）如果times参数指向两个timespec结构的数组，任一数组元素的tv_nsec字段的值为UTIME NOW，相应的时间戳就设置为当前时间，忽略相应的tv_sec字段。
+（3）如果times参数指向两个timespec结构的数组，任一数组元素的tv_nsec字段的值为UTIME_OMIT，相应的时间戳保持不变，忽略相应的tv_sec字段。
+（4）如果times参数指向两个timespec结构的数组，且tv_nsec 字段的值为既不是UTIME_NOW 也不是 UTIME_OMIT，在这种情况下，相应的时间戳设置为相应的 tv_sec 和tv_nsec字段的值。
+
+需要注意的是，如果fd是特殊值，比如 AT_FDCWD，则需要强制相对于当前目录计算pathname
+
+第一次调用utimensat的用户态地址：
+0x3ef1c
+
+记得atime 和 mtime的单位是秒！
+
+
+./runtest.exe -w entry-static.exe sscanf_long
+TODO : sys_prlimit64 需要实现
+出现下面这个usertrap？？？
+usertrap(): process name: entry-static.exe pid: 4
+scause 0000000000000002 ILLEGAL INSTRUCTION
+sepc=00000000000336a2
+stval=0000000000000000
+主要是使用下面这个宏对用户栈的大小进行限制：
+RLIMIT_STACK
+
+
+./runtest.exe -w entry-static.exe rlimit_open_files
+出现下面的问题：
+src/regression/rlimit-open-files.c:30: more fds are open than rlimit allows: fd=127, limit=42
+TODO ： sys_prlimit64 需要实现
+主要是使用下面这个宏对文件打开表进行限制：
+RLIMIT_NOFILE
+那么进程的文件打开表的表项需要进行动态改变
+
+
+
+./runtest.exe -w entry-static.exe socket 
+socket 系统调用需要实现
+
+
+
+./runtest.exe -w entry-static.exe pthread_cancel_points
+出现下面的问题？
+src/functional/pthread_cancel-points.c:144: res != PTHREAD_CANCELED failed (shm_open, canceled thread exit status)??
+似乎是在最后一个测试点挂了？
+{0, prepare_dummy, execute_shm_open, cleanup_shm, &(int){0}, "shm_open"},
+
+对用户程序打断点跟踪？
+static void execute_shm_open(void *arg)
+{
+	int *fd = arg;
+	TESTE(*fd = shm_open("/testshm", O_RDWR|O_CREAT, 0666), "");
+}
+int shm_open(const char *name, int flag, mode_t mode)
+{
+	int cs;
+	char buf[NAME_MAX+10];
+	if (!(name = __shm_mapname(name, buf))) return -1;
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
+	int fd = open(name, flag|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK, mode);
+	pthread_setcancelstate(cs, 0);
+	return fd;
+}
+char *__shm_mapname(const char *name, char *buf)
+{
+	char *p;
+	while (*name == '/') name++;
+	if (*(p = __strchrnul(name, '/')) || p==name ||
+	    (p-name <= 2 && name[0]=='.' && p[-1]=='.')) {
+		errno = EINVAL;
+		return 0;
+	}
+	if (p-name > NAME_MAX) {
+		errno = ENAMETOOLONG;
+		return 0;
+	}
+	memcpy(buf, "/dev/shm/", 9);
+	memcpy(buf+9, name, p-name+1);
+	return buf;
+}
+原因竟然是没有创建/dev/shm？？？？
+在init 中创建一个即可！
+
+./runtest.exe -w entry-static.exe pthread_robust_detach
+sys_get_robust_list系统调用需要实现？？
+不然会卡住，甚至出现 panic: usertrap: not from user mode？？
+
+用户地址： 468e2
+
+usertrap: not from user mode？？出现的地方：
+46cbc
+
+if (state==DT_DETACHED && self->map_base) {
+	/* Detached threads must block even implementation-internal
+		* signals, since they will not have a stack in their last
+		* moments of existence. */
+	__block_all_sigs(&set);
+
+	/* Robust list will no longer be valid, and was already
+		* processed above, so unregister it with the kernel. */
+	if (self->robust_list.off)
+		__syscall(SYS_set_robust_list, 0, 3*sizeof(long));
+
+	/* The following call unmaps the thread's stack mapping
+		* and then exits without touching the stack. */
+	__unmapself(self->map_base, self->map_size);
+}
+
+.global __unmapself
+.type __unmapself, %function
+__unmapself:
+	li a7, 215 # SYS_munmap
+	ecall
+	li a7, 93  # SYS_exit
+	ecall
+	
+
+加锁？？
+vmspace_unmap

@@ -1,0 +1,136 @@
+./cyclictest_testcode.sh
+
+问题一：
+没有文件：
+/dev/cpu_dma_latency
+在init 中创建一个？？
+error setting cpu_dma_latency to 0!?
+没有给这个设备写write 和 read？
+那就先特判一下？
+/dev/cpu_dma_latency set to 0us??
+ioctl 的问题？？？
+static void set_latency_target(void)
+{
+	struct stat s;
+	int err;
+
+	if (laptop) {
+		warn("not setting cpu_dma_latency to save battery power\n");
+		return;
+	}
+
+	errno = 0;
+	err = stat("/dev/cpu_dma_latency", &s);
+	if (err == -1) {
+		err_msg_n(errno, "WARN: stat /dev/cpu_dma_latency failed");
+		return;
+	}
+
+	errno = 0;
+	latency_target_fd = open("/dev/cpu_dma_latency", O_RDWR);
+	if (latency_target_fd == -1) {
+		err_msg_n(errno, "WARN: open /dev/cpu_dma_latency");
+		return;
+	}
+
+	errno = 0;
+	err = write(latency_target_fd, &latency_target_value, 4);
+	if (err < 1) {
+		err_msg_n(errno, "# error setting cpu_dma_latency to %d!", latency_target_value);
+		close(latency_target_fd);
+		return;
+	}
+	printf("# /dev/cpu_dma_latency set to %dus\n", latency_target_value);
+}
+
+问题二：
+内核版本识别错误？？
+Running on unknown kernel version...YMMV
+
+主要是下面这个函数：
+static int check_kernel(void)
+{
+	struct utsname kname;
+	int maj, min, sub, kv, ret;
+
+	ret = uname(&kname);
+	if (ret) {
+		fprintf(stderr, "uname failed: %s. Assuming not 2.6\n",
+				strerror(errno));
+		return KV_NOT_SUPPORTED;
+	}
+	sscanf(kname.release, "%d.%d.%d", &maj, &min, &sub);
+	if (maj == 2 && min == 6) {
+		if (sub < 18)
+			kv = KV_26_LT18;
+		else if (sub < 24)
+			kv = KV_26_LT24;
+		else if (sub < 28) {
+			kv = KV_26_33;
+			strcpy(functiontracer, "ftrace");
+			strcpy(traceroptions, "iter_ctrl");
+		} else {
+			kv = KV_26_33;
+			strcpy(functiontracer, "function");
+			strcpy(traceroptions, "trace_options");
+		}
+	} else if (maj >= 3) {
+		kv = KV_30;
+		strcpy(functiontracer, "function");
+		strcpy(traceroptions, "trace_options");
+
+	} else
+		kv = KV_NOT_SUPPORTED;
+
+	return kv;
+}
+
+
+问题三：
+sys_clock_getres
+需要实现？？
+static int check_timer(void)
+{
+	struct timespec ts;
+
+	if (clock_getres(CLOCK_MONOTONIC, &ts))
+		return 1;
+
+	return (ts.tv_sec != 0 || ts.tv_nsec != 1);
+}
+返回值要求 tv_sec 为 0 并且 nsec 为 1才行！
+
+
+问题四：
+sys_clock_nanosleep需要实现？？
+
+
+问题五：
+sys_sched_setaffinity需要实现？？
+
+
+问题六：
+futex的bug：查找和删除必须原子！！！
+
+
+问题七：
+sys_socketpair需要写？
+
+
+问题八：
+CLIENT: ready write (error: Operation not permitted)
+
+
+问题九：
+Creating workers (error: Operation not permitted)
+
+
+问题十：
+14 children started.  Expected 40
+
+
+问题十一：
+./cyclictest_testcode.sh: line 19: sleep: not found
+
+
+测试通过触发15号信号SIGTERM来杀掉进程

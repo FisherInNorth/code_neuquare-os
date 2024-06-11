@@ -125,9 +125,9 @@ void main(uint64 hartid) {
         oscomp_init();
 #else
         //========== First user process =========
-        
-#endif
         userinit();
+#endif
+
         // pdflush kernel thread
         // pdflush_init();
         __sync_synchronize();

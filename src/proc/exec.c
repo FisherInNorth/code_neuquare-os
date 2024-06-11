@@ -699,13 +699,13 @@ int do_execve(char *path, struct binprm *bprm) {
     for (last = s = path; *s; s++)
         if (*s == '/')
             last = s + 1;
-    safestrcpy(p->name, last, MIN(sizeof(p->name), 19));
+    safestrcpy(p->name, last, sizeof(p->name));
 
     // thread name
     char name_tmp[20];
     snprintf(name_tmp, 20, "%s-%d", p->name, p->tg->group_leader->tidx);
     strncpy(p->tg->group_leader->name, name_tmp, 20);
-    safestrcpy(p->name, last, MIN(sizeof(p->name), 19));
+    safestrcpy(p->name, last, sizeof(p->name));
 
     /* Commit to the user image */
     t->trapframe->sp = bprm->sp;

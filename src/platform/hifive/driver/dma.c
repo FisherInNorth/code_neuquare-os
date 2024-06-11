@@ -29,9 +29,6 @@ printf("%d",reg_control);
     
     DMA_CONTROL(chanID) = 0;
     DMA_CONTROL(chanID) |= (1 << CLAIM_FIELD) | (1 << DONEIE_FIELD) | (1 << ERRORIE_FIELD); // claim and set the doneIE
-    
-    wmb();
-    
     DMA_NEXT_CONFIG(chanID) = 0;
     DMA_NEXT_SOURCE(chanID) = pa_src;
     DMA_NEXT_DESTINATION(chanID) = pa_des;

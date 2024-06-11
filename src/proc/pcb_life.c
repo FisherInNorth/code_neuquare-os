@@ -197,17 +197,17 @@ void free_proc(struct proc *p) {
     p->tg = 0;
     if (p->ipc_ns) {
         // bug!!!
-        if (shm_ids(p->ipc_ns).key_ht) {
-            hash_destroy(shm_ids(p->ipc_ns).key_ht, 1); // free hash table
+        if(shm_ids(p->ipc_ns).key_ht) {
+            hash_destroy(shm_ids(p->ipc_ns).key_ht, 1);// free hash table
         }
         kfree((void *)p->ipc_ns);
     }
     p->ipc_ns = 0;
 
     // shared memory
-    if (!list_empty(&p->sysvshm.shm_clist)) {
-        struct shmid_kernel *shmid_cur = NULL;
-        struct shmid_kernel *shmid_tmp = NULL;
+    if(!list_empty(&p->sysvshm.shm_clist)) {
+        struct shmid_kernel* shmid_cur = NULL;
+        struct shmid_kernel* shmid_tmp = NULL;
         list_for_each_entry_safe(shmid_cur, shmid_tmp, &p->sysvshm.shm_clist, shm_clist) {
             kfree(shmid_cur);
             kfree(shmid_cur->shm_file->private_data);
@@ -235,13 +235,14 @@ void userinit(void) {
 
     safestrcpy(p->name, "/init", 10);
     safestrcpy(p->tg->group_leader->name, "/init-0", 10);
-    Info("========= Init first proc==========\n");
+
     p->mm->brk = 0;
 
     initproc = p;
 
     TCB_Q_changeState(p->tg->group_leader, TCB_RUNNABLE);
     release(&p->lock);
+
     return;
 }
 
@@ -252,12 +253,12 @@ void init_ret(void) {
     proc_current()->cwd = fat32_sb.root->i_op->idup(fat32_sb.root);
 #ifdef SUBMIT
     Info("======== submit-init return ========\n");
-    printfGreen("The initial Memory before execve init : %d pages\n", get_free_mem() / 4096);
+    printfGreen("The initial Memory before execve init : %d pages\n", get_free_mem()/4096);
     return;
 #else
     struct binprm bprm;
     memset(&bprm, 0, sizeof(bprm));
-
+    
     proc_current()->tg->group_leader->trapframe->a0 = do_execve("/boot/init", &bprm);
 #endif
 }
@@ -277,13 +278,14 @@ void thread_forkret(void) {
         init_ret();
     }
     // printfRed("tid : %d , name : %s forkret\n", thread_current()->tid, thread_current()->name);// debug
-
+    
     // trapframe_print(thread_current()->trapframe);// debug
     proc_current()->last_in = proc_current()->last_out = rdtime();
     thread_usertrapret();
 }
 
 int do_clone(uint64 flags, vaddr_t stack, uint64 ptid, uint64 tls, uint64 ctid) {
+
     // printfGreen("clone start, mm: %d pages\n", get_free_mem()/4096);
     int pid;
     struct proc *p = proc_current();
@@ -321,7 +323,6 @@ int do_clone(uint64 flags, vaddr_t stack, uint64 ptid, uint64 tls, uint64 ctid) 
     // ==============create thread for proc=======================
     // copy saved user registers.
     *(t->trapframe) = *(p->tg->group_leader->trapframe);
-    // Log("%x", t->trapframe->epc);
 
     // Cause fork to return 0 in the child.
     t->trapframe->a0 = 0;
@@ -371,7 +372,6 @@ int do_clone(uint64 flags, vaddr_t stack, uint64 ptid, uint64 tls, uint64 ctid) 
     // ==============create proc with group leader=======================
     acquire(&p->lock);
     /* Copy vma */
-    // print_vma(&p->mm->head_vma);
     if (vmacopy(p->mm, np->mm) < 0) {
         free_proc(np);
         release(&p->lock);
@@ -401,8 +401,8 @@ int do_clone(uint64 flags, vaddr_t stack, uint64 ptid, uint64 tls, uint64 ctid) 
             if (p->ofile[i])
                 // np->ofile[i] = fat32_filedup(p->ofile[i]);
                 np->ofile[i] = p->ofile[i]->f_op->dup(p->ofile[i]);
-        // else
-        //     break;// to speed up?
+            // else 
+            //     break;// to speed up?
         // TODO : clone a completely same fdtable   >> not necessary
     }
 
@@ -432,6 +432,7 @@ int do_clone(uint64 flags, vaddr_t stack, uint64 ptid, uint64 tls, uint64 ctid) 
     acquire(&t->lock);
     TCB_Q_changeState(t, TCB_RUNNABLE);
     release(&t->lock);
+
 
     return pid;
 }
@@ -509,12 +510,6 @@ void do_exit(int status) {
     if (last_thread) {
         release(&p->lock);
     }
-
-// #include "termios.h"
-//     extern struct termios term;
-//     if (p->pid == 3) {
-//         term.c_lflag = 0xa;
-//     }
     // !!!! =======atomic=======
     thread_sched();
     panic("do_exit should never return");

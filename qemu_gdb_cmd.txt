@@ -1,0 +1,4 @@
+file fsimg/libc-test/entry-static.exe
+break pthread_cancel_points_main
+c
+layout src

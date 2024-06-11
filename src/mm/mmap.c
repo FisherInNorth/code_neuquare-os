@@ -66,7 +66,6 @@ void *do_mmap(vaddr_t addr, size_t length, int prot, int flags, struct file *fp,
         start = addr;
         end = addr + length;
         struct vma *vma;
-        // print_vma(&mm->head_vma);
         if ((vma = find_vma_for_va(mm, addr)) != NULL) {
             // print_vma(&mm->head_vma);
             if (start != vma->startva) {
@@ -84,16 +83,6 @@ void *do_mmap(vaddr_t addr, size_t length, int prot, int flags, struct file *fp,
             }
 
             // print_vma(&mm->head_vma);
-            if (vma->type == VMA_HEAP) {
-                struct vma *pos;
-
-                list_for_each_entry(pos, &mm->head_vma, node) {
-                    if (pos->type == VMA_HEAP && pos->startva + pos->size == mm->brk) {
-                        mm->heapvma = pos;
-                    }
-                }
-                
-            }
             if (vma != NULL) {
                 del_vma_from_vmspace(&mm->head_vma, vma);
             }
@@ -104,7 +93,6 @@ void *do_mmap(vaddr_t addr, size_t length, int prot, int flags, struct file *fp,
             //     Warn("the addr %p is already mapped", addr);
             //     return MAP_FAILED;
             // }
-            // print_vma(&mm->head_vma);
         }
     }
     if (flags & MAP_ANONYMOUS || fp == NULL) {
@@ -119,11 +107,6 @@ void *do_mmap(vaddr_t addr, size_t length, int prot, int flags, struct file *fp,
             return MAP_FAILED;
         }
     }
-    // print_vma(&mm->head_vma);
-    // if (mapva == proc_current()->mm->start_brk) {
-    //     proc_current()->mm->start_brk = mapva + length;
-    //     Log("cur brk is %p", mapva + length);
-    // }
     // print_vma(&mm->head_vma);
 
     // print_vma(&mm->head_vma);

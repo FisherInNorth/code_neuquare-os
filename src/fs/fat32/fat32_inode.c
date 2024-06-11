@@ -879,8 +879,8 @@ void fat32_inode_put(struct inode *ip) {
         fat32_inode_hash_destroy(ip);
 
         // write back dirty pages of inode
-        fat32_i_mapping_writeback(ip);
-        // list_del_reinit(&ip->dirty_list);// !!!
+        // fat32_i_mapping_writeback(ip);
+        list_del_reinit(&ip->dirty_list);// !!!
 
         // destory i_mapping
         fat32_i_mapping_destroy(ip);
@@ -1020,7 +1020,7 @@ int fat32_filter_longname(dirent_l_t *dirent_l_tmp, char *ret_name) {
 ushort fat32_longname_popstack(Stack_t *fcb_stack, uchar *fcb_s_name, char *name_buf) {
     int name_idx = 0;
     ushort long_valid = 0;
-    dirent_l_t fcb_l_tmp;
+    dirent_l_t fcb_l_tmp = {0};
     if (stack_is_empty(fcb_stack)) {
         return 0;
     }
@@ -1387,7 +1387,7 @@ int fat32_find_same_name_cnt(struct inode *dp, char *name) {
 // 获取fcb的插入位置(可以插入到碎片中)
 // 在目录节点中找到能插入 fcb_cnt_req 个 fcb 的启始偏移位置，并返回它
 int fat32_dir_fcb_insert_offset(struct inode *dp, uchar fcb_cnt_req) {
-    struct trav_control tc;
+    struct trav_control tc = {0};
     tc.start_off = 0;
     tc.end_off = dp->i_size;
     tc.kbuf = NULL;
@@ -1406,7 +1406,7 @@ int fat32_dir_fcb_insert_offset(struct inode *dp, uchar fcb_cnt_req) {
 
 // 一个目录除了 .. 和 . 是否为空？
 int fat32_isdirempty(struct inode *dp) {
-    struct trav_control tc;
+    struct trav_control tc = {0};
     tc.start_off = 0;
     tc.end_off = dp->i_size;
     tc.kbuf = NULL;

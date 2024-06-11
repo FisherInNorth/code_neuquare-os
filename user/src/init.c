@@ -6,7 +6,7 @@
 #include "string.h"
 
 char *argv[] = {"/busybox/busybox", "sh", 0};
-char *envp[] = {"PATH=/:/usr/bin:/musl-gcc/include:/bin/", "LD_LIBRARY_PATH=/", 0};
+char *envp[] = {"PATH=/oscomp:/bin:/test:/busybox:/iozone:/lmbench", "LD_LIBRARY_PATH=/libc-test", 0};
 
 #define CONSOLE 1
 #define DEV_NULL 2
@@ -45,6 +45,14 @@ int main(void) {
     // mknod("/dev/urandom", S_IFCHR, DEV_CPU_DMA_LATENCY << 8);
 
     printf("\n");
+    printf("██╗      ██████╗ ███████╗████████╗██╗    ██╗ █████╗ ██╗  ██╗███████╗██╗   ██╗██████╗ \n");
+    printf("██║     ██╔═══██╗██╔════╝╚══██╔══╝██║    ██║██╔══██╗██║ ██╔╝██╔════╝██║   ██║██╔══██╗\n");
+    printf("██║     ██║   ██║███████╗   ██║   ██║ █╗ ██║███████║█████╔╝ █████╗  ██║   ██║██████╔╝\n");
+    printf("██║     ██║   ██║╚════██║   ██║   ██║███╗██║██╔══██║██╔═██╗ ██╔══╝  ██║   ██║██╔═══╝ \n");
+    printf("███████╗╚██████╔╝███████║   ██║   ╚███╔███╔╝██║  ██║██║  ██╗███████╗╚██████╔╝██║     \n");
+    printf("╚══════╝ ╚═════╝ ╚══════╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝     \n");
+    printf("\n");
+
     for (;;) {
         printf("init: starting sh\n");
 

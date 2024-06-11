@@ -19,7 +19,6 @@ static inline int tag_get(struct radix_tree_node *node, uint32 tag,
                           int offset) {
     return test_bit(offset, node->tags[tag]);
 }
-
 static inline void root_tag_set(struct radix_tree_root *root, uint32 tag) {
     root->gfp_mask |= (gfp_t)(1 << (tag + __GFP_BITS_SHIFT));
 }

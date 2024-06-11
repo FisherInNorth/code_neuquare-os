@@ -292,8 +292,6 @@ void panic(char *s) {
     printf(s);
     printf("\n");
     panicked = 1; // freeze uart output from other CPUs
-// extern void shutdown_writeback();
-//     shutdown_writeback();
     sbi_shutdown();
     for (;;)
         ;

@@ -89,7 +89,7 @@ static int __pdflush(struct pdflush_work *my_work) {
             break;
         }
     }
-    atomic_dec_return(&pdflush_control.nr_pdflush_threads);
+    atomic_inc_return(&pdflush_control.nr_pdflush_threads);
 
     release(&pdflush_control.lock);
 

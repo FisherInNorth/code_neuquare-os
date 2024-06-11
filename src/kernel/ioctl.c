@@ -1,7 +1,6 @@
 #include <fs/ioctls.h>
 #include <fs/vfs/fs.h>
 #include <fs/stat.h>
-#include "proc/pcb_life.h"
 
 static long do_ioctl(struct file *filp, unsigned int cmd,
                      unsigned long arg) {
@@ -14,25 +13,6 @@ static long do_ioctl(struct file *filp, unsigned int cmd,
         error = filp->f_op->ioctl(filp, cmd, arg);
     }
 
-#include "termios.h"
-        extern struct termios term;
-    if (cmd == TCSETS) {
-        struct termios newterm;
-        // Log("hit sets");
-        if (copyin(proc_current()->mm->pagetable, (char *)&newterm, arg, sizeof(newterm)) < 0)
-            return -1;
-        term = newterm;
-        // Log("hit 3");
-        // break;
-    } else if (cmd == TCGETS) {
-        // Log("hit get");
-        if (copyout(proc_current()->mm->pagetable, arg, (char *)&term, sizeof(term)) < 0)
-            return -1;
-        // Log("hit 2");
-        // break;
-    }
-
-    return 0;
 out:
     return error;
 }
@@ -107,11 +87,11 @@ int vfs_ioctl(struct file *filp, unsigned int fd, unsigned int cmd, unsigned lon
     return error;
 }
 
-// uint64 sys_ppoll(void) {
-//     static uint64 lines = 1000000000000;
-//     if (lines--)
-//         return 1;
-//     else
-//         return 0;
-//     // return 1; // a positive value indicates success
-// }
+uint64 sys_ppoll(void) {
+    static int lines = 1000;
+    if (lines--)
+        return 1;
+    else
+        return 0;
+    // return 1; // a positive value indicates success
+}

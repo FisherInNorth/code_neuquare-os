@@ -31,7 +31,7 @@ struct futex *get_futex(uint64 uaddr, int assert) {
         struct futex *fp = (struct futex *)kzalloc(sizeof(struct futex));
         if (fp == NULL) {
             printf("mm : %d\n", get_free_mem());
-        panic("get_futex : no free space\n");
+            panic("get_futex : no free space\n");
         }
         futex_init(fp, "futex");
         hash_insert(&futex_map, (void *)uaddr, (void *)fp, 0); // not holding lock
@@ -157,7 +157,6 @@ int futex_requeue(uint64 uaddr1, int nr_wake, uint64 uaddr2, int nr_requeue) {
         release(&p->lock);
         return 0;
     }
-
     struct futex *fp_new = get_futex(uaddr2, 0); // without assert
     if (fp_new == NULL) {
         panic("not tested\n");
@@ -168,7 +167,7 @@ int futex_requeue(uint64 uaddr1, int nr_wake, uint64 uaddr2, int nr_requeue) {
     while (!Queue_isempty_atomic(&fp_old->waiting_queue) && ret < nr_requeue) {
         t = (struct tcb *)Queue_provide_atomic(&fp_old->waiting_queue, 1); // remove it
         if (t == NULL)
-            panic("futex requeue : no waiting queue") ;
+            panic("futex requeue : no waiting queue");
         if (t->state != TCB_SLEEPING) {
             printf("%s\n", fp_old->waiting_queue.name);
             printf("%s\n", t->state);

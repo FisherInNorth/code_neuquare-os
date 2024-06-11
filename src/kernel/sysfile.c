@@ -1672,7 +1672,7 @@ uint64 sys_renameat2(void) {
 // - arg: a user address
 // 返回值：成功执行，返回0。错误，则返回-1。
 uint64 sys_ioctl(void) {
-    // return 0;
+    return 0;
     int fd, ret;
     struct file *f;
     unsigned long cmd, arg;
@@ -1680,7 +1680,7 @@ uint64 sys_ioctl(void) {
         return -1;
     }
     arglong(1, (long *)&cmd);
-    arglong(2, (long *)&arg);
+    arglong(1, (long *)&arg);
 
     ret = vfs_ioctl(f, fd, cmd, arg);
 
@@ -1846,9 +1846,5 @@ uint64 sys_fsync(void) {
 // truncate a file to a specified length
 // int ftruncate(int fd, off_t length);
 uint64 sys_ftruncate(void) {
-    return 0;
-}
-
-uint64 sys_fchmodat(void) {
     return 0;
 }

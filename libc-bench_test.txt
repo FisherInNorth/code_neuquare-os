@@ -1,0 +1,91 @@
+将编译选项改为 -g
+记得make clean-all
+
+
+问题一：
+执行完clock_gettime后就卡住了？？？
+
+10774:	1101                	addi	sp,sp,-32
+10776:	ec06                	sd	ra,24(sp)
+10778:	e822                	sd	s0,16(sp)
+1077a:	1000                	addi	s0,sp,32
+1077c:	72b1                	lui	t0,0xfffec
+1077e:	77028293          	addi	t0,t0,1904 # fffffffffffec770 <__BSS_END__+0xfffffffffffc29e8>
+10782:	9116                	add	sp,sp,t0
+10784:	77b1                	lui	a5,0xfffec
+10786:	17c1                	addi	a5,a5,-16 # fffffffffffebff0 <__BSS_END__+0xfffffffffffc2268>
+10788:	97a2                	add	a5,a5,s0
+1078a:	76a7b423          	sd	a0,1896(a5)
+
+
+-exec ni 单条汇编指令调试
+用户栈又爆了，于是我们将USTACK_PAGE 设置为了20（粗糙的解决办法）
+
+ctrl + A + C 启动qemu调试
+显示所有的CPU的寄存器
+info registers -a
+
+
+
+
+用户态地址：
+0x1ae72
+
+
+
+问题二:
+b_regex_search 执行完 clock_gettime 后又双叒叕卡住了？？？
+
+将用户栈加大到了 90 个页
+
+
+问题三：
+panic: mappages: remap
+线程数量超上限了
+
+问题四：
+在通过libc-test后似乎仍然有并发bug？？
+
+
+问题五：
+Trapframe {
+    sp: 3fffdfeff0
+    fp: 30022f20
+    pc: 1aafe
+    ra: 1a234
+    a0: 2
+    a1: 3fffdffb20
+    a2: 0
+    a3: 8
+    a4: 29b28
+    a5: 0
+    s3: 30000000
+}
+panic: usertrap: not from user mode
+
+问题六：
+连续跑和多次跑出现的问题？
+连续跑第二和第三遍:
+b_malloc_thread_local (0)
+[PAGEFAULT]: cow: try to write a readonly page
+usertrap(): process name: libc-bench pid: 63
+scause 000000000000000d LOAD PAGEFAULT
+sepc=0000000000012e02
+stval=000000003008017d
+
+b_pthread_create_serial1 (0)
+if (lk == NULL) {
+    panic("???\n");
+}
+将futex初始化为全0！用kzalloc
+
+程序卡住？？？
+
+连续跑第四遍出现：
+fat32_next_cluster中的ASSERT失败？？
+
+
+解决了一个futex有关的内存泄漏问题！！
+struct hash_table futex_map = {.lock = INIT_SPINLOCK(futex_hash_table),
+                               .type = FUTEX_MAP,
+                               .size = FUTEX_NUM};

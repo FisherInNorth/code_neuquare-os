@@ -23,7 +23,7 @@
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.
 #define KERNBASE 0x80200000L
-#define PHYSTOP (0x80000000L + 1024 * 1024 * 1024)
+#define PHYSTOP (0x80000000L + 128 * 1024 * 1024)
 // 0x80a00000
 
 // map the trampoline page to the highest address,
@@ -57,7 +57,7 @@
 #define TRAPFRAME (SIGRETURN - PGSIZE)
 #define THREAD_TRAPFRAME(id) (TRAPFRAME - (id)*PGSIZE)
 
-#define USTACK_PAGE 10
+#define USTACK_PAGE 80
 #define USTACK (MAXVA - 512 * 10 * PGSIZE - USTACK_PAGE * PGSIZE)
 #define USTACK_GURAD_PAGE (USTACK - PGSIZE)
 

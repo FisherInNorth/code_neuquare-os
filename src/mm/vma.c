@@ -69,7 +69,6 @@ static int add_vma_to_vmspace(struct list_head *head, struct vma *vma) {
     // printfYELLOW("===============\n");
     // print_vma(head);
     if (check_vma_intersect(head, vma) != 0) {
-        // print_vma(head);
         Log("add_vma_to_vmspace: vma overlap\n");
         ASSERT(0);
         return -1;

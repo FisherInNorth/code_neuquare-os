@@ -1,0 +1,9 @@
+target extended-remote 127.0.0.1:26000
+add-inferior
+inferior 2
+attach 2
+set schedule-multiple on
+symbol-file kernel-qemu
+break main.c:106
+c
+layout src

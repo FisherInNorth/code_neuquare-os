@@ -145,7 +145,7 @@ uint64 sys_nanosleep(void) {
 extern void shutdown_writeback(void);
 uint64 sys_shutdown() {
     // syscall_count_analysis();
-    shutdown_writeback();
+    // shutdown_writeback();
     
     // printfGreen("mm: %d pages when shutdown\n", get_free_mem()/4096);
     sbi_shutdown();
@@ -345,7 +345,7 @@ int do_prlimit(struct proc *p, uint32 resource, struct rlimit *new_rlim, struct 
                 p->cur_ofile = new_rlim->rlim_cur;
                 break;
             case RLIMIT_STACK:
-                // panic("stack not tested\n");
+                panic("stack not tested\n");
                 break;
             default:
                 panic("RLIMIT : not tested\n");
@@ -708,7 +708,6 @@ uint64 sys_clock_nanosleep(void) {
 
     return 0;
 }
-
 // int getrusage(int who, struct rusage *usage);
 uint64 sys_getrusage(void) {
     int who;
@@ -756,9 +755,5 @@ uint64 sys_setpgid(void) {
 }
 
 uint64 sys_getpgid(void) {
-    return 0;
-}
-
-uint64 sys_prctl(void) {
     return 0;
 }

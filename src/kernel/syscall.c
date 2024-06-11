@@ -153,7 +153,7 @@ void syscall_count_analysis(void) {
     for (int i = 0; i < len_syscall; i++) {
         if (syscall_str[i] != NULL && syscall_cnt[i] != 0)
             // printf("%s , cnt : %d, time : %ld ns, time per syscall : %ld, mm : %d pages\n", syscall_str[i], syscall_cnt[i], syscall_time[i], syscall_time[i]/syscall_cnt[i], syscall_mm[i]);
-            printf("time per syscall : %-10ld, total time : %-10ld, total cnt : %-10ld, syscall name : %s, mm : %d pages\n", syscall_time[i] / syscall_cnt[i], syscall_time[i], syscall_cnt[i], syscall_str[i], syscall_mm[i]);
+            printf("time per syscall : %-10ld, total time : %-10ld, total cnt : %-10ld, syscall name : %s, mm : %d pages\n", syscall_time[i]/syscall_cnt[i], syscall_time[i], syscall_cnt[i] ,syscall_str[i], syscall_mm[i]);
     }
 }
 
@@ -276,8 +276,8 @@ static struct syscall_info info[] = {
     [SYS_kill] { "kill", 2, "dd" },
     // // int fstat(int fd, struct stat*);
     // [SYS_fstat] { "fstat", 2, "dp" },
-    // int chdir(const char*);
-    [SYS_chdir] { "chdir", 1, "s" },
+    // // int chdir(const char*);
+    // [SYS_chdir] { "chdir", 1, "s" },
     // // int sleep(int);
     // [SYS_sleep] { "sleep", 1, "d" },
     // // int uptime(void);
@@ -326,11 +326,7 @@ static struct syscall_info info[] = {
     // int mkdirat(int dirfd, const char *pathname, mode_t mode);
     [SYS_mkdirat] { "mkdirat", 3, "dsu" },
     [SYS_pread64] { "pread64", 4, "dpdd" },
-    [SYS_pwrite64] { "pwrite64", 4, "dpdd" },
-    //        int ppoll(struct pollfd *fds, nfds_t nfds,
-    //    const struct timespec *tmo_p, const sigset_t *sigmask);
-    [SYS_ppoll] { "ppoll", 4, "pdpp", },
-};
+    [SYS_pwrite64] { "pwrite64", 4, "dpdd" }};
 
 // static int syscall_filter[] = {
 //     [SYS_read] 1,
@@ -347,16 +343,11 @@ char *strace_proc_name[STRACE_TARGET_NUM] = {
 int is_strace_target(int num) {
     /* trace all proc except sh and init */
     if (proc_current()->pid > 2) {
-        // if (num == SYS_ppoll || num == SYS_read) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
-        // if (num == SYS_execve) {
-        //     return 1;
-        // } else {
-        //     return 0;
-        // }
+        if (num == SYS_execve) {
+            return 1;
+        } else {
+            return 0;
+        }
         // if (num == SYS_getuid) {
         //     return 0;
         // }
@@ -398,8 +389,8 @@ int is_strace_target(int num) {
         //     return 0;
         // }
         return 1;
-
-        // return 0;
+    } else {
+        return 0;
         // if(syscall_filter[num]) {
         //     return 0;
         // }
@@ -412,7 +403,7 @@ int is_strace_target(int num) {
     //         return 1;
     //     }
     // }
-    return 0;
+    // return 0;
 }
 
 #endif
